@@ -181,7 +181,12 @@ self.addEventListener("fetch", e => {
   if (u.origin !== scope.origin || !u.pathname.startsWith(scope.pathname)) return;
   const p = u.pathname.slice(scope.pathname.length);
   if (p === "app.html" && e.request.mode === "navigate") {           // not signed in: go to the sign-in page
-    e.respondWith(kvGet("auth").then(a => a && a.refresh ? fetch(e.request) : Response.redirect(scope.href, 302)));
+    // always ask GitHub whether the page changed (phones otherwise keep a saved copy for a while)
+    e.respondWith(kvGet("auth").then(a => a && a.refresh ? fetch(e.request, { cache: "no-cache" }) : Response.redirect(scope.href, 302)));
+    return;
+  }
+  if ((p === "" || p === "index.html") && e.request.mode === "navigate") {
+    e.respondWith(fetch(e.request, { cache: "no-cache" }));
     return;
   }
   if (!ROUTED.test(p)) return;                                      // the page, icons, manifest: from GitHub Pages

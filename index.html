@@ -85,7 +85,8 @@ async function openDropbox() {
   show("code"); setTimeout(() => $("#codeIn").focus(), 300);
 }
 async function enter() {
-  await navigator.serviceWorker.register("sw.js", { scope: "./" });
+  const reg = await navigator.serviceWorker.register("sw.js", { scope: "./", updateViaCache: "none" });
+  reg.update().catch(() => {});                       // pick up a new version of the helper each time the app opens
   await navigator.serviceWorker.ready;
   location.replace("app.html");
 }
