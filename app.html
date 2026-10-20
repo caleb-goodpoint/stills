@@ -1252,6 +1252,7 @@ $("#lbtags").addEventListener("click", e => {
 let lbTok = 0;
 function hideLb() {
   $("#lb").classList.remove("open"); current = -1; Scope.hide(); if (typeof Phone !== "undefined") Phone.closed();
+  if (typeof gridStale !== "undefined" && gridStale) { gridStale = false; const y = window.scrollY; refresh(); window.scrollTo(0, y); }
   if (boardsDirty) { boardsDirty = false; const y = window.scrollY; refresh(); window.scrollTo(0, y); }   // frames removed from the open board
 }
 function closeLb() { if (lbInHistory) history.back(); else hideLb(); }
@@ -1299,8 +1300,23 @@ $("#lb .stage").addEventListener("touchend", e => {
   if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) step(dx < 0 ? 1 : -1);
   else if (dy > 90 && Math.abs(dy) > Math.abs(dx)) closeLb();
 }, { passive: true });
-PHONE.addEventListener("change", () => { applyMode(); applyCols(); refresh(); });
-LAND.addEventListener("change", () => { applyMode(); applyCols(); if (typeof Phone !== "undefined") Phone.relayout(); });
+// Rotation: iOS reports in-between sizes and fires size / orientation updates at different moments, so wait for the
+// turn to finish, then settle the layout from scratch (twice: the final size can arrive late). Never re-render the grid
+// under an open photo; do that when it closes.
+let vpT1 = 0, vpT2 = 0, wasPhone = PHONE.matches, gridStale = false;
+function settleViewport() {
+  applyMode(); applyCols();
+  if (M() !== wasPhone) { wasPhone = M(); if ($("#lb").classList.contains("open")) gridStale = true; else refresh(); }
+  if (typeof Phone !== "undefined") Phone.relayout();
+}
+function onViewportChange() {
+  clearTimeout(vpT1); clearTimeout(vpT2);
+  vpT1 = setTimeout(settleViewport, 160); vpT2 = setTimeout(settleViewport, 600);
+}
+PHONE.addEventListener("change", onViewportChange);
+LAND.addEventListener("change", onViewportChange);
+addEventListener("orientationchange", onViewportChange);
+if (window.visualViewport) visualViewport.addEventListener("resize", onViewportChange);
 $("#lb").addEventListener("click", e => { if (!M() && e.target.classList.contains("stage")) closeLb(); });
 document.addEventListener("keydown", e => {
   if ($("#picker").classList.contains("open")) { if (e.key === "Escape") closePicker(); return; }
@@ -1432,7 +1448,8 @@ const Phone = (() => {
     on = on == null ? !lb.classList.contains("bare") : on;
     if (!on) return setDetent(detent);
     if (isLand()) { lb.classList.add("bare"); side.classList.remove("open-side"); stage.style.right = "0px"; return; }
-    lb.classList.add("bare"); side.style.transition = ""; side.style.transform = `translateY(${H + bar.offsetHeight + 40}px)`; stage.style.bottom = "0px";
+    measure();                                          // fresh height (the phone may have just turned)
+    lb.classList.add("bare"); side.style.transform = `translateY(${H + bar.offsetHeight + 40}px)`; stage.style.bottom = "0px";
   }
   // Scopes on the picture, like a monitor: waveform + vectorscope + Kelvin over the frame, picture stays full size
   function setHud(on) {
@@ -1443,9 +1460,11 @@ const Phone = (() => {
     requestAnimationFrame(() => Scope.rebuild());
   }
   function relayout() {
-    if (!lb.classList.contains("open")) return;
+    if (!lb.classList.contains("open") || !M()) return;
+    side.style.transition = "none"; side.style.transform = ""; side.style.bottom = ""; stage.style.bottom = ""; stage.style.right = "";
+    side.classList.remove("full", "open-side"); resetTrack(false); lbZoom.reset(); dot.classList.remove("on");
     if (lb.classList.contains("bare")) bare(true); else setDetent(detent);
-    requestAnimationFrame(() => Scope.rebuild());
+    requestAnimationFrame(() => { side.style.transition = ""; Scope.rebuild(); });
   }
   function setDropper(on) {
     dropOn = on; lb.classList.toggle("drop", on); document.body.classList.toggle("dropping", on);
@@ -1572,7 +1591,7 @@ const Phone = (() => {
        info: () => { if (hud) setHud(false); setDetent(detent === "peek" ? "half" : "peek"); } })[b.dataset.a]();
   });
   $("#dropDone").onclick = () => setDropper(false);
-  let rz = 0; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (M()) relayout(); }, 120); });
+  addEventListener("resize", onViewportChange);
   return { opened, closed, relayout, dropping: () => dropOn };
 })();
 if (M()) $("#palHint").textContent = "Tap Pick to add colors from the picture · tap a color to copy";
