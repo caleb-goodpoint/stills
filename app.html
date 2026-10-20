@@ -1156,7 +1156,7 @@ function pinchZoom(el, { max = 8, dblTap = false, noPan = null } = {}) {
       e.preventDefault(); const m = mid(e.touches[0], e.touches[1]);
       s = Math.min(max, Math.max(1, pinch.s * dist(e.touches[0], e.touches[1]) / pinch.d));
       tx = m.x - pinch.b.cx - s * pinch.ux; ty = m.y - pinch.b.cy - s * pinch.uy; apply();
-    } else if (pan && e.touches.length === 1) {
+    } else if (pan && e.touches.length === 1 && !(noPan && noPan())) {
       e.preventDefault(); const t = e.touches[0]; tx += t.clientX - pan.x; ty += t.clientY - pan.y; pan = { x: t.clientX, y: t.clientY }; clamp(); apply();
     }
   }, { passive: false });
@@ -1292,7 +1292,7 @@ $("#filterBtn").onclick = () => { document.body.classList.toggle("show-filters")
 
 // Swipe in the large view: left/right = next/previous, down = back to grid.
 let touch0 = null;
-const lbZoom = pinchZoom($("#lbimg"), { dblTap: () => M() && !Phone.dropping(), noPan: () => M() && Phone.dropping() });
+const lbZoom = pinchZoom($("#lbimg"), { dblTap: () => M() && !Phone.dropping(), noPan: () => M() && (Phone.dropping() || Phone.probing()) });
 $("#lb .stage").addEventListener("touchstart", e => { if (M()) { touch0 = null; return; } const t = e.touches[0]; touch0 = e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null; }, { passive: true });
 $("#lb .stage").addEventListener("touchend", e => {
   if (!touch0 || lbZoom.zoomed() || lbZoom.busy()) { touch0 = null; return; }   // zoomed or just pinched: don't swipe to the next still
@@ -1516,20 +1516,30 @@ const Phone = (() => {
   }
 
   // gestures on the picture
-  let g = null, tapTimer = 0, tapAt = 0;
+  let g = null, tapTimer = 0, tapAt = 0, probing = false;
   stage.addEventListener("touchstart", e => {
     if (!M() || current < 0) return;
     if (e.target.closest("button, #dropHint")) { g = null; return; }
     if (e.touches.length > 1) { if (g) { g.multi = true; resetTrack(); } return; }
     const t = e.touches[0];
-    g = { x: t.clientX, y: t.clientY, t: Date.now(), axis: null, dx: 0, dy: 0, multi: false, zoomed: lbZoom.zoomed(), dbl: false };
+    g = { x: t.clientX, y: t.clientY, t: Date.now(), axis: null, dx: 0, dy: 0, multi: false, zoomed: lbZoom.zoomed(), dbl: false, probe: false, last: t };
     if (tapTimer && Date.now() - tapAt < 320) { clearTimeout(tapTimer); tapTimer = 0; g.dbl = true; }   // second tap: it's a double-tap zoom
-    if (dropOn) probeAt(t);
+    if (dropOn) { probeAt(t); return; }
+    // press and hold: read the picture under your finger on the waveform, vectorscope and Kelvin (nothing is added)
+    const gg = g;
+    g.hold = setTimeout(() => {
+      if (g !== gg || gg.axis || gg.multi) return;
+      gg.probe = true; probing = true;
+      if (!hud && detent === "peek") setHud(true);           // make sure a scope is in view
+      probeAt(gg.last);
+    }, 260);
   }, { passive: true });
   stage.addEventListener("touchmove", e => {
     if (!g || g.multi || e.touches.length > 1) return;
     const t = e.touches[0], dx = t.clientX - g.x, dy = t.clientY - g.y;
-    if (dropOn) { e.preventDefault(); probeAt(t); return; }
+    g.last = t;
+    if (dropOn || g.probe) { e.preventDefault(); probeAt(t); return; }
+    if (Math.hypot(dx, dy) > 8) clearTimeout(g.hold);          // moving early: it's a swipe, not a hold
     if (g.zoomed || lbZoom.zoomed()) return;            // zoomed in: one finger pans the picture
     if (!g.axis) { if (Math.hypot(dx, dy) < 10) return; g.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y"; track.style.transition = "none"; }
     e.preventDefault(); g.dx = dx; g.dy = dy;
@@ -1538,6 +1548,8 @@ const Phone = (() => {
   }, { passive: false });
   stage.addEventListener("touchend", e => {
     if (!g || e.touches.length) return; const gg = g; g = null;
+    clearTimeout(gg.hold);
+    if (gg.probe) { probing = false; setTimeout(() => { if (!g) dot.classList.remove("on"); }, 900); return; }   // reading only: nothing added
     if (gg.multi) return;
     const t = e.changedTouches[0], dt = Date.now() - gg.t, moved = Math.hypot(t.clientX - gg.x, t.clientY - gg.y);
     if (dropOn) return pickAt(t);
@@ -1557,7 +1569,7 @@ const Phone = (() => {
     // a tap shows / hides the controls (waits a moment in case it's a double-tap zoom)
     if (!gg.dbl && moved < 10 && dt < 350) { tapAt = Date.now(); tapTimer = setTimeout(() => { tapTimer = 0; bare(); }, 300); }
   });
-  stage.addEventListener("touchcancel", () => { g = null; resetTrack(); lb.style.background = ""; });
+  stage.addEventListener("touchcancel", () => { if (g) clearTimeout(g.hold); g = null; probing = false; resetTrack(); lb.style.background = ""; });
 
   // dragging the sheet between its three heights (pull it below the first one to hide the controls)
   let sd = null;
@@ -1592,9 +1604,9 @@ const Phone = (() => {
   });
   $("#dropDone").onclick = () => setDropper(false);
   addEventListener("resize", onViewportChange);
-  return { opened, closed, relayout, dropping: () => dropOn };
+  return { opened, closed, relayout, dropping: () => dropOn, probing: () => probing };
 })();
-if (M()) $("#palHint").textContent = "Tap Pick to add colors from the picture · tap a color to copy";
+if (M()) $("#palHint").textContent = "Press and hold the picture to read it on the scopes · Pick adds colors · tap a color to copy";
 applyCols(); updateBack();
 
 // ---- Boards: collect frames into named lookbooks (boards.json via the server), export a PDF into the job's 01_PREP/REFS ----
