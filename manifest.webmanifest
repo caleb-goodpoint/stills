@@ -1,0 +1,1 @@
+{"name": "Stills", "short_name": "Stills", "display": "standalone", "start_url": "./", "scope": "./", "background_color": "#0e0e0f", "theme_color": "#0e0e0f", "icons": [{"src": "icon.png", "sizes": "512x512", "type": "image/png"}]}

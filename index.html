@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Stills">
+<meta name="theme-color" content="#0e0e0f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<title>Stills</title>
+<style>
+  :root { --bg: #0a0a0b; --text: #ecebe7; --muted: #8e8c87; --line: rgba(255,255,255,.12); --accent: #e8b04a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased; }
+  main { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 24px calc(32px + env(safe-area-inset-bottom)); text-align: center; }
+  .mark { width: 64px; height: 64px; color: var(--accent); margin-bottom: 18px; }
+  h1 { font-size: 13px; font-weight: 600; letter-spacing: .36em; text-transform: uppercase; margin: 0 0 10px; }
+  p { color: var(--muted); margin: 0 0 26px; max-width: 320px; }
+  button, input { font: inherit; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; max-width: 320px; padding: 13px 18px; border-radius: 12px; border: 0;
+    background: var(--text); color: #111; font-weight: 600; cursor: pointer; }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); margin-top: 10px; }
+  .btn:disabled { opacity: .5; }
+  input { width: 100%; max-width: 320px; padding: 13px 14px; border-radius: 12px; border: 1px solid var(--line); background: #141416; color: var(--text); font-size: 16px; text-align: center; letter-spacing: .04em; outline: none; margin-bottom: 10px; }
+  input:focus { border-color: var(--accent); }
+  ol { text-align: left; color: var(--muted); max-width: 320px; padding-left: 20px; margin: 0 0 18px; font-size: 14px; }
+  ol b { color: var(--text); font-weight: 500; }
+  .err { color: #ff8a7a; font-size: 13px; min-height: 20px; margin-top: 10px; max-width: 320px; }
+  .small { font-size: 12px; color: #5e5c58; margin-top: 30px; max-width: 320px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <svg class="mark" viewBox="0 0 512 512" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"><path d="M96 196 V160 H150"/><path d="M362 160 H416 V196"/><path d="M416 316 V352 H362"/><path d="M150 352 H96 V316"/></g></svg>
+  <h1>Stills</h1>
+
+  <section id="loading"><p>Opening your library…</p></section>
+
+  <section id="start" hidden>
+    <p>Caleb’s stills library. Sign in with Dropbox to open it; your frames are read straight from your Dropbox.</p>
+    <button class="btn" id="go">Sign in with Dropbox</button>
+  </section>
+
+  <section id="code" hidden>
+    <ol>
+      <li>In the Dropbox page that opened, tap <b>Allow</b>.</li>
+      <li>Copy the code it shows.</li>
+      <li>Come back here and paste it below.</li>
+    </ol>
+    <input id="codeIn" placeholder="Paste the code" autocomplete="one-time-code" autocapitalize="off" spellcheck="false">
+    <button class="btn" id="done">Open the library</button>
+    <button class="btn ghost" id="again">Open Dropbox again</button>
+  </section>
+
+  <div class="err" id="err"></div>
+  <div class="small">Only someone signed in to Caleb’s Dropbox can open this library. The page itself holds no frames.</div>
+</main>
+<script>
+const APP_KEY = "xtkvkqi52cun78t";
+const $ = s => document.querySelector(s);
+const show = id => ["loading", "start", "code"].forEach(x => $("#" + x).hidden = x !== id);
+const err = m => { $("#err").textContent = m || ""; };
+
+function idb() { return new Promise((res, rej) => { const r = indexedDB.open("stills", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function kvGet(k) { const db = await idb(); return new Promise(res => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }); }
+async function kvSet(k, v) { const db = await idb(); return new Promise(res => { const t = db.transaction("kv", "readwrite"); v === undefined ? t.objectStore("kv").delete(k) : t.objectStore("kv").put(v, k); t.oncomplete = () => res(); }); }
+
+const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+async function authorizeURL() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
+  localStorage.setItem("stills-verifier", verifier);
+  const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  return "https://www.dropbox.com/oauth2/authorize?" + new URLSearchParams({ client_id: APP_KEY, response_type: "code",
+    code_challenge: challenge, code_challenge_method: "S256", token_access_type: "offline" });
+}
+async function openDropbox() {
+  err(); const url = await authorizeURL();
+  window.open(url, "_blank") || (location.href = url);
+  show("code"); setTimeout(() => $("#codeIn").focus(), 300);
+}
+async function enter() {
+  await navigator.serviceWorker.register("sw.js", { scope: "./" });
+  await navigator.serviceWorker.ready;
+  location.replace("app.html");
+}
+async function finish() {
+  const code = $("#codeIn").value.trim(); if (!code) return err("Paste the code from Dropbox first.");
+  $("#done").disabled = true; err();
+  try {
+    let r, tries = 0;
+    do {
+      r = await fetch("https://api.dropboxapi.com/oauth2/token", { method: "POST", body: new URLSearchParams({
+        code, grant_type: "authorization_code", code_verifier: localStorage.getItem("stills-verifier") || "", client_id: APP_KEY }) });
+      if (r.status === 429) await new Promise(s => setTimeout(s, 3000 * ++tries));
+    } while (r.status === 429 && tries < 5);
+    const j = await r.json();
+    if (!r.ok || !j.refresh_token) throw new Error("Dropbox didn’t accept that code. Tap “Open Dropbox again” and use the newest code.");
+    await kvSet("auth", { refresh: j.refresh_token, access: j.access_token, expires: Date.now() + j.expires_in * 1000 });
+    localStorage.removeItem("stills-verifier");
+    await enter();
+  } catch (e) { err(e.message); $("#done").disabled = false; }
+}
+$("#go").onclick = openDropbox;
+$("#again").onclick = openDropbox;
+$("#done").onclick = finish;
+$("#codeIn").addEventListener("keydown", e => { if (e.key === "Enter") finish(); });
+
+(async () => {
+  if (!("serviceWorker" in navigator)) { show("start"); return err("This browser can’t open the library. Use Safari or Chrome."); }
+  const q = new URLSearchParams(location.search);
+  if (q.has("signout")) { await kvSet("auth", undefined); for (const k of await caches.keys()) await caches.delete(k); history.replaceState(null, "", "./"); }
+  const a = await kvGet("auth");
+  if (a && a.refresh && !q.has("signin")) return enter().catch(e => { show("start"); err(e.message); });
+  if (q.has("signin")) err("Your Dropbox sign-in expired. Sign in again.");
+  show("start");
+})();
+</script>
+</body>
+</html>

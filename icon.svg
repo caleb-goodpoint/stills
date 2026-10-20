@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0e0e0f"/>
+  <!-- 2.39 frame lines -->
+  <g fill="none" stroke="#e8b04a" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M96 196 V160 H150"/>
+    <path d="M362 160 H416 V196"/>
+    <path d="M416 316 V352 H362"/>
+    <path d="M150 352 H96 V316"/>
+  </g>
+  <!-- centre mark -->
+  <g stroke="#e8e6e3" stroke-width="16" stroke-linecap="round">
+    <path d="M256 232 V280"/>
+    <path d="M232 256 H280"/>
+  </g>
+</svg>
