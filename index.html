@@ -50,11 +50,11 @@
     <ol>
       <li>In the Dropbox page that opened, tap <b>Allow</b>.</li>
       <li>Copy the code it shows.</li>
-      <li>Come back here and paste it below.</li>
+      <li>Come back to this app (tap <b>Done</b>, or open Stills from your home screen) and paste it below.</li>
     </ol>
     <input id="codeIn" placeholder="Paste the code" autocomplete="one-time-code" autocapitalize="off" spellcheck="false">
     <button class="btn" id="done">Open the library</button>
-    <button class="btn ghost" id="again">Open Dropbox again</button>
+    <button class="btn ghost" id="again">Get a new code from Dropbox</button>
   </section>
 
   <div class="err" id="err"></div>
@@ -64,6 +64,7 @@
 const APP_KEY = "xtkvkqi52cun78t";
 const $ = s => document.querySelector(s);
 const show = id => ["loading", "start", "code"].forEach(x => $("#" + x).hidden = x !== id);
+// Use the code you already have; only "Get a new code" starts over (a new code needs a new verifier).
 const err = m => { $("#err").textContent = m || ""; };
 
 function idb() { return new Promise((res, rej) => { const r = indexedDB.open("stills", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
@@ -117,6 +118,9 @@ $("#codeIn").addEventListener("keydown", e => { if (e.key === "Enter") finish();
   const a = await kvGet("auth");
   if (a && a.refresh && !q.has("signin")) return enter().catch(e => { show("start"); err(e.message); });
   if (q.has("signin")) err("Your Dropbox sign-in expired. Sign in again.");
+  // Mid sign-in (e.g. iPhone reopened the app after you went to Dropbox): show the paste box, not a fresh start,
+  // so the code Dropbox already gave you still works.
+  if (localStorage.getItem("stills-verifier")) { show("code"); return; }
   show("start");
 })();
 </script>
