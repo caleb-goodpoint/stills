@@ -287,6 +287,8 @@ body.m #lbpal { order: 5; } body.m #palHint { order: 6; } body.m #lb .side .scop
 body.m #lb .btns { order: 10; } body.m #lbpath { order: 11; } body.m #lbstat { order: 12; }
 /* ---- phone, turned sideways: full picture, icon toolbar, info as a right-hand panel ---- */
 #scopeHud, #fvClose { display: none; }
+/* iOS: a long press on an image opens its own Copy/Share menu and cancels our touch; the full-res viewer keeps it for saving */
+body.m #lb .stage, body.m #lb .stage img { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 body.m.land #lb .side { top: 0; left: auto; right: 0; width: min(380px, 46vw); height: auto; border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
   transform: translateX(105%); overflow-y: auto; touch-action: pan-y; padding: calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 20px 16px; }
 body.m.land #lb .side.open-side { transform: none; }
@@ -1525,6 +1527,7 @@ const Phone = (() => {
     g = { x: t.clientX, y: t.clientY, t: Date.now(), axis: null, dx: 0, dy: 0, multi: false, zoomed: lbZoom.zoomed(), dbl: false, probe: false, last: t };
     if (tapTimer && Date.now() - tapAt < 320) { clearTimeout(tapTimer); tapTimer = 0; g.dbl = true; }   // second tap: it's a double-tap zoom
     if (dropOn) { probeAt(t); return; }
+    if (hud) { g.probe = true; probing = true; probeAt(t); return; }   // Scopes on: touch and drag reads the picture at once
     // press and hold: read the picture under your finger on the waveform, vectorscope and Kelvin (nothing is added)
     const gg = g;
     g.hold = setTimeout(() => {
@@ -1606,7 +1609,7 @@ const Phone = (() => {
   addEventListener("resize", onViewportChange);
   return { opened, closed, relayout, dropping: () => dropOn, probing: () => probing };
 })();
-if (M()) $("#palHint").textContent = "Press and hold the picture to read it on the scopes · Pick adds colors · tap a color to copy";
+if (M()) $("#palHint").textContent = "Scopes on: drag on the picture to read it · Pick adds colors · tap a color to copy";
 applyCols(); updateBack();
 
 // ---- Boards: collect frames into named lookbooks (boards.json via the server), export a PDF into the job's 01_PREP/REFS ----
