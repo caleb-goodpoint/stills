@@ -123,7 +123,7 @@ button.plain { background: none; border: 0; color: var(--muted); cursor: pointer
 #fvImg, #lbimg { touch-action: none; transform-origin: 50% 50%; will-change: transform; }
 #fvScroll { overflow: hidden; }
 #lb .btns a { background: var(--chip); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font-size: 12px; text-decoration: none; }
-@media (max-width: 760px) {
+@media (max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px) {
   body { -webkit-tap-highlight-color: transparent; }
   header { padding: calc(10px + env(safe-area-inset-top)) 12px 8px; }
   .top { gap: 8px; }
@@ -276,6 +276,54 @@ body.m .bbBtns { flex-wrap: nowrap; width: 100%; }
 body.m .bbBtns select { flex: 1; min-width: 0; max-width: none; font-size: 14px; }
 body.m .bbBtns button { font-size: 14px; padding: 7px 10px; white-space: nowrap; }
 body.m #bBoard { display: none !important; }
+
+
+
+/* phone info sheet: palette, then scopes, then the look notes (long Claude notes no longer push the scopes off the half sheet) */
+body.m #lb .side { display: flex; flex-direction: column; }
+body.m #lb .side > * { flex: none; }
+body.m .grab { order: 0; } body.m #lbtitle { order: 1; } body.m #lbmeta { order: 2; } body.m .palhead { order: 3; } body.m #fmt { order: 4; }
+body.m #lbpal { order: 5; } body.m #palHint { order: 6; } body.m #lb .side .scopes { order: 7; } body.m #lbdesc { order: 8; } body.m #lbtags { order: 9; }
+body.m #lb .btns { order: 10; } body.m #lbpath { order: 11; } body.m #lbstat { order: 12; }
+/* ---- phone, turned sideways: full picture, icon toolbar, info as a right-hand panel ---- */
+#scopeHud, #fvClose { display: none; }
+body.m.land #lb .side { top: 0; left: auto; right: 0; width: min(380px, 46vw); height: auto; border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
+  transform: translateX(105%); overflow-y: auto; touch-action: pan-y; padding: calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 20px 16px; }
+body.m.land #lb .side.open-side { transform: none; }
+body.m.land .grab { display: none; }
+body.m.land #lbBar { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+body.m.land #lbBar button { font-size: 0; gap: 0; padding: 8px 0 6px; }
+body.m.land #lb .back { top: calc(8px + env(safe-area-inset-top)); left: calc(10px + env(safe-area-inset-left)); }
+body.m.land #lbCount { right: calc(14px + env(safe-area-inset-right)); }
+body.m.land #tabs { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+body.m.land #tabs button { flex-direction: row; justify-content: center; gap: 8px; font-size: 12px; padding: 8px 0; }
+body.m.land header { padding-left: calc(12px + env(safe-area-inset-left)); padding-right: calc(12px + env(safe-area-inset-right)); }
+body.m.land #grid, body.m.land #projects, body.m.land #boardsView { padding-left: calc(2px + env(safe-area-inset-left)); padding-right: calc(2px + env(safe-area-inset-right)); }
+
+/* ---- scopes on the picture (Scopes button) ---- */
+body.m #lb.hud #scopeHud { display: block; position: absolute; z-index: 2; left: calc(8px + env(safe-area-inset-left)); right: calc(8px + env(safe-area-inset-right));
+  bottom: calc(var(--barH, 52px) + 8px); padding: 8px; border-radius: 12px; background: rgba(10,10,11,.72);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.08); }
+body.m #lb.hud.bare #scopeHud { bottom: calc(8px + env(safe-area-inset-bottom)); }
+body.m #lb.hud #scopeHud .scopes { margin: 0; }
+body.m #lb.hud #scopeHud #wf { height: 84px; }
+body.m #lb.hud #scopeHud .vsrow { margin-top: 6px; gap: 10px; }
+body.m #lb.hud #scopeHud #vs { width: 84px; }
+body.m #lb.hud #scopeHud .rd b { font-size: 15px; }
+body.m #lb.hud #scopeHud .rd span { font-size: 11px; }
+body.m #lb.hud #scopeHud #scopeNote:empty { display: none; }
+body.m.land #lb.hud #scopeHud { left: auto; width: min(560px, 62vw); }
+body.m.land #lb.hud #scopeHud .scopes { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+body.m.land #lb.hud #scopeHud .vsrow { margin: 0; }
+body.m.land #lb.hud #scopeHud #wf { height: 80px; }
+body.m.land #lb.hud #scopeHud #vs { width: 80px; }
+body.m #lb.hud .side { transform: translateY(calc(100% + 140px)) !important; }
+body.m.land #lb.hud .side { transform: translateX(110%) !important; }
+
+/* ---- full-res viewer: controls clear of the notch and rounded corners ---- */
+#fv .back { left: calc(12px + env(safe-area-inset-left)); }
+#fv #fvClose { display: inline-flex; left: auto; right: calc(12px + env(safe-area-inset-right)); }
+body.land #fvHint { display: none; }
 
 /* ================= Desktop (Mac) design: sidebar · gallery · screening-room viewer ================= */
 #side, .size, #strip { display: none; }
@@ -522,6 +570,7 @@ body:not(.m) .back { font-family: var(--sans); }
   <div class="stage">
     <button class="back" id="lbBack" title="Back to grid (Esc)">← Back</button>
     <span id="lbCount"></span>
+    <div id="scopeHud"></div>
     <div id="dropHint">Drag to aim · lift to add <button id="dropDone">Done</button></div>
     <button class="nav prev" title="Previous (←)">‹</button>
     <div id="strip"></div>
@@ -570,6 +619,7 @@ body:not(.m) .back { font-family: var(--sans); }
     <button data-a="sim"><svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="5.5"/><circle cx="15" cy="12" r="5.5"/></svg>Similar</button>
     <button data-a="proj"><svg viewBox="0 0 24 24"><path d="M3 7.5A2 2 0 0 1 5 5.5h4l2 2h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Project</button>
     <button data-a="full" id="lbBarFull"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Full-res</button>
+    <button data-a="scopes"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M6.5 15.5l2.5-5 2.5 3.5 2.5-6 2.5 7.5"/></svg>Scopes</button>
     <button data-a="info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.6v.2"/></svg>Info</button>
   </div>
 </div>
@@ -588,6 +638,7 @@ body:not(.m) .back { font-family: var(--sans); }
 <div id="wfDot"></div>
 <div id="fv" aria-hidden="true">
   <button class="back" id="fvBack">← Back</button>
+  <button class="back" id="fvClose" aria-label="Close">✕</button>
   <span id="fvHint">Double-tap to zoom · press and hold to save</span>
   <div id="fvScroll"><img id="fvImg" alt=""></div>
 </div>
@@ -653,11 +704,13 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PHONE = matchMedia("(max-width: 760px)");
+const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
+const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
 const M = () => document.body.classList.contains("m");
 function applyMode() {
   document.body.classList.toggle("m", PHONE.matches);
+  document.body.classList.toggle("land", PHONE.matches && LAND.matches);
   const f = document.querySelector(".filters"); if (!f) return;
   if (PHONE.matches) { if (f.parentNode.id === "sideFilters") document.querySelector("header .top").after(f); }
   else if (f.parentNode.id !== "sideFilters") document.querySelector("#sideFilters").appendChild(f);
@@ -666,7 +719,9 @@ applyMode(); document.body.dataset.tab = "stills";
 const COLS = [1, 2, 3, 5];
 let cols = 3; try { cols = COLS.includes(+localStorage.getItem("stills-cols")) ? +localStorage.getItem("stills-cols") : 3; } catch (e) {}
 const tileAspect = r => cols === 1 ? r : cols === 2 ? 1.5 : 1;
-const tileW = () => (document.documentElement.clientWidth - 4 - (cols - 1) * 2) / cols;
+// sideways, the same pinch setting shows more across (3 upright -> 5 sideways)
+const effCols = () => document.body.classList.contains("land") ? ({ 1: 2, 2: 4, 3: 5, 5: 8 })[cols] : cols;
+const tileW = () => (document.documentElement.clientWidth - 4 - (effCols() - 1) * 2) / effCols();
 const fullReady = new Set();   // originals already downloaded (unrotated), so paging can show them at once
 // Rotation is per still and non-destructive: degrees live in rotations.json (served) or localStorage (file version).
 let ROT = {};
@@ -989,7 +1044,7 @@ const Scope = (() => {
       if (x < 0 || y < 0 || x >= S.sw || y >= S.sh) continue; const k = y * S.sw + x; a[0] += S.d[k * 4]; a[1] += S.d[k * 4 + 1]; a[2] += S.d[k * 4 + 2]; n++; }
     return a.map(v => v / n);
   }
-  return { load, sample, probe, hide: () => { token++; dot.classList.remove("on"); } };
+  return { load, sample, probe, rebuild: () => { if (S && S.img) build(S.img); }, hide: () => { token++; dot.classList.remove("on"); } };
 })();
 
 // ---- Palette: the still's colors + colors you pick on it (click the image); click a color to copy (formats from palette) ----
@@ -1128,6 +1183,7 @@ function openFull(src) {
 }
 function hideFull() { $("#fv").classList.remove("open"); fvZoom.reset(); $("#fvImg").removeAttribute("src"); }
 $("#fvBack").onclick = () => history.back();
+$("#fvClose").onclick = () => history.back();
 $("#bFull").addEventListener("click", e => {
   const d = current >= 0 ? rot(view[current]) : 0;
   if (TOUCH) { e.preventDefault(); openFull($("#bFull").href); }
@@ -1244,6 +1300,7 @@ $("#lb .stage").addEventListener("touchend", e => {
   else if (dy > 90 && Math.abs(dy) > Math.abs(dx)) closeLb();
 }, { passive: true });
 PHONE.addEventListener("change", () => { applyMode(); applyCols(); refresh(); });
+LAND.addEventListener("change", () => { applyMode(); applyCols(); if (typeof Phone !== "undefined") Phone.relayout(); });
 $("#lb").addEventListener("click", e => { if (!M() && e.target.classList.contains("stage")) closeLb(); });
 document.addEventListener("keydown", e => {
   if ($("#picker").classList.contains("open")) { if (e.key === "Escape") closePicker(); return; }
@@ -1312,7 +1369,7 @@ $("#projects").addEventListener("click", e => {
 
 // Grid density: pinch the grid for 1, 2, 3 or 5 across (remembered), keeping the frame under your fingers in place.
 function applyCols() {
-  const g = $("#grid"); g.dataset.cols = cols; g.style.setProperty("--cols", cols); g.style.setProperty("--ta", cols === 2 ? 1.5 : 1);
+  const g = $("#grid"); g.dataset.cols = cols; g.style.setProperty("--cols", effCols()); g.style.setProperty("--ta", cols === 2 ? 1.5 : 1);
   if (M()) document.querySelectorAll(".tile[data-rot]").forEach(t => t.replaceWith(makeTile(+t.dataset.i)));
 }
 function setCols(n, at) {
@@ -1351,16 +1408,44 @@ const Phone = (() => {
     D.full = H;
   }
   function place(v, anim = true) { side.style.transition = anim ? "" : "none"; side.style.transform = `translateY(${Math.max(0, H - v)}px)`; }
+  const isLand = () => document.body.classList.contains("land");
+  let hud = false;
+  const scopes = $(".scopes"), scopesHome = scopes.nextElementSibling;
   function setDetent(d) {
-    detent = d; measure(); lb.classList.remove("bare");
+    detent = d; lb.classList.remove("bare"); dot.classList.remove("on");
+    lb.style.setProperty("--barH", bar.offsetHeight + "px");
+    if (isLand()) {                                     // sideways: info is a panel on the right; the picture keeps the rest
+      side.style.transform = ""; side.style.bottom = bar.offsetHeight + "px"; side.classList.remove("full");
+      const open = d !== "peek" && !hud;
+      side.classList.toggle("open-side", open);
+      stage.style.bottom = "0px"; stage.style.right = open ? side.offsetWidth + "px" : "0px";
+      return;
+    }
+    side.classList.remove("open-side"); stage.style.right = "";
+    measure();
+    if (hud) { stage.style.bottom = "0px"; return; }    // scopes are on the picture; the sheet stays down
     side.classList.toggle("full", d === "full"); if (d !== "full") side.scrollTop = 0;
-    place(D[d]); dot.classList.remove("on");
+    place(D[d]);
     stage.style.bottom = d === "peek" ? "0px" : (D.half + bar.offsetHeight) + "px";   // keep the picture above the sheet
   }
   function bare(on) {
     on = on == null ? !lb.classList.contains("bare") : on;
     if (!on) return setDetent(detent);
+    if (isLand()) { lb.classList.add("bare"); side.classList.remove("open-side"); stage.style.right = "0px"; return; }
     lb.classList.add("bare"); side.style.transition = ""; side.style.transform = `translateY(${H + bar.offsetHeight + 40}px)`; stage.style.bottom = "0px";
+  }
+  // Scopes on the picture, like a monitor: waveform + vectorscope + Kelvin over the frame, picture stays full size
+  function setHud(on) {
+    hud = on; lb.classList.toggle("hud", on);
+    bar.querySelector('[data-a="scopes"]').classList.toggle("on", on);
+    if (on) $("#scopeHud").appendChild(scopes); else side.insertBefore(scopes, scopesHome);
+    setDetent(detent);
+    requestAnimationFrame(() => Scope.rebuild());
+  }
+  function relayout() {
+    if (!lb.classList.contains("open")) return;
+    if (lb.classList.contains("bare")) bare(true); else setDetent(detent);
+    requestAnimationFrame(() => Scope.rebuild());
   }
   function setDropper(on) {
     dropOn = on; lb.classList.toggle("drop", on); document.body.classList.toggle("dropping", on);
@@ -1388,7 +1473,8 @@ const Phone = (() => {
   }
   function closed() {
     document.body.classList.remove("lb-open"); setDropper(false); lb.classList.remove("bare");
-    stage.style.bottom = ""; side.style.transform = ""; side.classList.remove("full"); resetTrack(false); lb.style.background = "";
+    if (hud) setHud(false);
+    stage.style.bottom = ""; stage.style.right = ""; side.style.transform = ""; side.classList.remove("full", "open-side"); resetTrack(false); lb.style.background = "";
   }
   function resetTrack(anim = true) { track.style.transition = anim ? "transform .2s ease-out" : "none"; track.style.transform = ""; }
   function page(dir) {
@@ -1457,7 +1543,7 @@ const Phone = (() => {
   // dragging the sheet between its three heights (pull it below the first one to hide the controls)
   let sd = null;
   side.addEventListener("touchstart", e => {
-    if (!M() || e.touches.length !== 1 || e.target.closest(".wave")) { sd = null; return; }
+    if (!M() || isLand() || e.touches.length !== 1 || e.target.closest(".wave")) { sd = null; return; }
     sd = { y: e.touches[0].clientY, v0: D[detent], drag: false, dy: 0, t: Date.now() };
   }, { passive: true });
   side.addEventListener("touchmove", e => {
@@ -1482,11 +1568,12 @@ const Phone = (() => {
   bar.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b || current < 0) return;
     ({ drop: () => setDropper(!dropOn), rot: () => turn(90), sim: () => $("#bSimilar").click(), proj: () => $("#bProj").click(),
-       full: () => $("#bFull").click(), board: () => openPicker(), info: () => setDetent(detent === "peek" ? "half" : "peek") })[b.dataset.a]();
+       full: () => $("#bFull").click(), board: () => openPicker(), scopes: () => setHud(!hud),
+       info: () => { if (hud) setHud(false); setDetent(detent === "peek" ? "half" : "peek"); } })[b.dataset.a]();
   });
   $("#dropDone").onclick = () => setDropper(false);
-  addEventListener("resize", () => { if (M() && lb.classList.contains("open") && !lb.classList.contains("bare")) setDetent(detent); });
-  return { opened, closed, dropping: () => dropOn };
+  let rz = 0; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (M()) relayout(); }, 120); });
+  return { opened, closed, relayout, dropping: () => dropOn };
 })();
 if (M()) $("#palHint").textContent = "Tap Pick to add colors from the picture · tap a color to copy";
 applyCols(); updateBack();
