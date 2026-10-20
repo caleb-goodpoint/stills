@@ -706,6 +706,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
+const PAGE_VERSION = "2026-10-20 · scopes-touch 3";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1231,6 +1232,7 @@ function openLb(i) {
     (dx.src ? `<b>Original</b><span>${dx.src[0]}×${dx.src[1]}${dx.cam ? " · " + esc(dx.cam) : ""}</span>` : "") +
     (dx.lut ? `<b>LUT</b><span>${dx.lut.map(l => esc(l.replace(/^[^A-Za-z0-9]+/, ""))).join("<br>")}</span>` : "") +
     (dx.tl || dx.tc ? `<b>Timeline</b><span>${esc(dx.tl || "")}${dx.tc ? " @ " + dx.tc : ""}</span>` : "") +
+    `<b>Page</b><span>${PAGE_VERSION}</span>` +
     `<b>Tone</b><span>${tone ? tone[1] : ""} (${Math.round(s.L * 100)}%)</span><b>Color</b><span>${col ? col[1] : ""}</span>` +
     `<b>Modified</b><span>${s.mt}</span>` + (s.alt && s.alt.length ? `<b>Also at</b><span>${s.alt.length} other location${s.alt.length > 1 ? "s" : ""}</span>` : "");
   $("#lb").classList.add("open");
@@ -1506,7 +1508,11 @@ const Phone = (() => {
   }
 
   // eyedropper: aim a ring just above your finger (so the finger doesn't cover it), lift to add the color
-  const aim = t => ({ clientX: t.clientX, clientY: t.clientY - 46 });
+  // read a spot just above the finger, kept inside the picture (a wide frame is short on an upright phone)
+  const aim = t => {
+    const r = $("#lbimg").getBoundingClientRect(), clamp = (v, a, b) => Math.min(b - 1, Math.max(a + 1, v));
+    return { clientX: clamp(t.clientX, r.left, r.right), clientY: clamp(t.clientY - 46, r.top, r.bottom) };
+  };
   function probeAt(t) {
     const p = aim(t); Scope.probe(p); const c = Scope.sample(p);
     dot.style.left = p.clientX + "px"; dot.style.top = p.clientY + "px"; dot.style.background = c ? `rgb(${c.map(Math.round).join(",")})` : ""; dot.classList.add("on");
