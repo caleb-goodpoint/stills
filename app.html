@@ -288,7 +288,9 @@ body.m #lb .btns { order: 10; } body.m #lbpath { order: 11; } body.m #lbstat { o
 /* ---- phone, turned sideways: full picture, icon toolbar, info as a right-hand panel ---- */
 #scopeHud, #fvClose { display: none; }
 /* iOS: a long press on an image opens its own Copy/Share menu and cancels our touch; the full-res viewer keeps it for saving */
-body.m #lb .stage, body.m #lb .stage img { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+body.m #lb .stage, body.m #lb .stage img { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none; }
+#dbg { position: fixed; z-index: 60; left: 8px; right: 8px; top: calc(52px + env(safe-area-inset-top)); background: rgba(0,0,0,.82); color: #9f9; font: 11px/1.35 ui-monospace, Menlo, monospace; padding: 6px 8px; border-radius: 8px; pointer-events: none; white-space: pre-wrap; display: none; }
+#dbg.on { display: block; }
 body.m.land #lb .side { top: 0; left: auto; right: 0; width: min(380px, 46vw); height: auto; border-radius: 0; border-top: 0; border-left: 1px solid var(--line);
   transform: translateX(105%); overflow-y: auto; touch-action: pan-y; padding: calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 20px 16px; }
 body.m.land #lb .side.open-side { transform: none; }
@@ -576,7 +578,7 @@ body:not(.m) .back { font-family: var(--sans); }
     <div id="dropHint">Drag to aim · lift to add <button id="dropDone">Done</button></div>
     <button class="nav prev" title="Previous (←)">‹</button>
     <div id="strip"></div>
-    <div id="track"><div class="slide p"><img id="pgPrev" alt=""></div><div class="slide c"><img id="lbimg" alt=""></div><div class="slide n"><img id="pgNext" alt=""></div></div>
+    <div id="track"><div class="slide p"><img id="pgPrev" alt="" draggable="false"></div><div class="slide c"><img id="lbimg" alt="" draggable="false"></div><div class="slide n"><img id="pgNext" alt="" draggable="false"></div></div>
     <button class="nav next" title="Next (→)">›</button>
   </div>
   <div class="side">
@@ -638,6 +640,7 @@ body:not(.m) .back { font-family: var(--sans); }
   </div>
 </div>
 <div id="wfDot"></div>
+<div id="dbg"></div>
 <div id="fv" aria-hidden="true">
   <button class="back" id="fvBack">← Back</button>
   <button class="back" id="fvClose" aria-label="Close">✕</button>
@@ -706,7 +709,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-20 · scopes-touch 3";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-20 · scopes-touch 4";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1232,7 +1235,7 @@ function openLb(i) {
     (dx.src ? `<b>Original</b><span>${dx.src[0]}×${dx.src[1]}${dx.cam ? " · " + esc(dx.cam) : ""}</span>` : "") +
     (dx.lut ? `<b>LUT</b><span>${dx.lut.map(l => esc(l.replace(/^[^A-Za-z0-9]+/, ""))).join("<br>")}</span>` : "") +
     (dx.tl || dx.tc ? `<b>Timeline</b><span>${esc(dx.tl || "")}${dx.tc ? " @ " + dx.tc : ""}</span>` : "") +
-    `<b>Page</b><span>${PAGE_VERSION}</span>` +
+    `<b>Page</b><span id="pageVer">${PAGE_VERSION} (tap for touch readout)</span>` +
     `<b>Tone</b><span>${tone ? tone[1] : ""} (${Math.round(s.L * 100)}%)</span><b>Color</b><span>${col ? col[1] : ""}</span>` +
     `<b>Modified</b><span>${s.mt}</span>` + (s.alt && s.alt.length ? `<b>Also at</b><span>${s.alt.length} other location${s.alt.length > 1 ? "s" : ""}</span>` : "");
   $("#lb").classList.add("open");
@@ -1412,6 +1415,24 @@ $("#grid").addEventListener("touchmove", e => {
 }, { passive: false });
 $("#grid").addEventListener("touchend", e => { if (e.touches.length < 2) gp = null; });
 let colT = 0; addEventListener("resize", () => { clearTimeout(colT); colT = setTimeout(() => { if (M()) applyCols(); }, 200); });
+
+
+// Touch readout (tap the Page line in Details): shows what the picture receives, to debug on a real phone
+const Dbg = (() => {
+  const box = $("#dbg"), lines = [];
+  const on = () => box.classList.contains("on");
+  function log(msg) { if (!on()) return; lines.push(msg); while (lines.length > 9) lines.shift(); box.textContent = lines.join("\n"); }
+  document.addEventListener("click", e => { if (e.target.id === "pageVer") { box.classList.toggle("on"); lines.length = 0; log("touch readout on · " + PAGE_VERSION); } });
+  ["touchstart", "touchmove", "touchend", "touchcancel", "pointerdown", "pointercancel", "dragstart", "contextmenu"].forEach(type =>
+    document.addEventListener(type, e => {
+      if (!on() || !e.target.closest || !e.target.closest("#lb .stage")) return;
+      if (type === "touchmove" && Math.random() > 0.25) return;                       // keep moves readable
+      const t = (e.changedTouches && e.changedTouches[0]) || e, r = $("#lbimg").getBoundingClientRect();
+      log(`${type} on ${e.target.id || e.target.tagName.toLowerCase()} @${Math.round(t.clientX)},${Math.round(t.clientY)} ` +
+          `pic ${Math.round(r.top)}-${Math.round(r.bottom)} · scopes ${$("#lb").classList.contains("hud") ? "on" : "off"} · ring ${$("#wfDot").classList.contains("on") ? "on" : "off"} · ${$("#rdL").textContent}`);
+    }, { capture: true, passive: true }));
+  return { log };
+})();
 
 // ---- Phone large view: swipe paging, tap to hide controls, eyedropper, pull-up info sheet, toolbar ----
 const Phone = (() => {
