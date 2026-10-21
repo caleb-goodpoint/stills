@@ -714,7 +714,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-20 · scopes-touch 7";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-20 · scopes-touch 8";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1055,8 +1055,13 @@ const Scope = (() => {
     const sw = W / Z * kx, sh = H / Z * ky, sx = (cx - r.left) * kx - sw / 2, sy = (cy - r.top) * ky - sh / 2;
     const lx = loupe.getContext("2d"); lx.fillStyle = "#100f0e"; lx.fillRect(0, 0, loupe.width, loupe.height);
     lx.drawImage(wfc, sx, sy, sw, sh, 0, 0, loupe.width, loupe.height);
-    loupe.style.left = Math.min(innerWidth - W - 6, Math.max(6, e.clientX - W / 2)) + "px";
-    loupe.style.top = Math.max(6, e.clientY - H - 40) + "px";
+    // place it near the finger without covering the ring on the picture: above, up-left, up-right, then higher
+    const fx = e.clientX, fy = e.clientY, ring = dot.classList.contains("on") ? dot.getBoundingClientRect() : null;
+    const spots = [[fx - W / 2, fy - H - 40], [fx - W - 24, fy - H - 16], [fx + 24, fy - H - 16], [fx - W / 2, fy - H - 170], [fx - W / 2, fy - 2 * H - 190]]
+      .map(([x, y]) => [Math.min(innerWidth - W - 6, Math.max(6, x)), Math.max(6, y)]);
+    const free = ([x, y]) => !ring || x > ring.right + 10 || x + W < ring.left - 10 || y > ring.bottom + 10 || y + H < ring.top - 10;
+    const [lx0, ly0] = spots.find(free) || spots[0];
+    loupe.style.left = lx0 + "px"; loupe.style.top = ly0 + "px";
     loupe.classList.add("on");
   }
   const hideLoupe = () => loupe.classList.remove("on");
