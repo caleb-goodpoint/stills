@@ -287,6 +287,11 @@ body.m #lbpal { order: 5; } body.m #palHint { order: 6; } body.m #lb .side .scop
 body.m #lb .btns { order: 10; } body.m #lbpath { order: 11; } body.m #lbstat { order: 12; }
 /* ---- phone, turned sideways: full picture, icon toolbar, info as a right-hand panel ---- */
 #scopeHud, #fvClose { display: none; }
+/* scopes: no text selection (a firm press on iOS selected the waveform and showed its own magnifier) */
+.scopes, .scopes * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#wfLoupe { position: fixed; z-index: 30; width: 150px; height: 96px; border-radius: 48px; border: 2px solid rgba(255,255,255,.85);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.55); pointer-events: none; display: none; }
+#wfLoupe.on { display: block; }
 /* iOS: a long press on an image opens its own Copy/Share menu and cancels our touch; the full-res viewer keeps it for saving */
 body.m #lb .stage, body.m #lb .stage img { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none; }
 #dbg { position: fixed; z-index: 60; left: 8px; right: 8px; top: calc(52px + env(safe-area-inset-top)); background: rgba(0,0,0,.82); color: #9f9; font: 11px/1.35 ui-monospace, Menlo, monospace; padding: 6px 8px; border-radius: 8px; pointer-events: none; white-space: pre-wrap; display: none; }
@@ -709,7 +714,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-20 · scopes-touch 5";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-20 · scopes-touch 6";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1031,10 +1036,26 @@ const Scope = (() => {
   $("#lbimg").addEventListener("mousemove", probe);
   $("#lbimg").addEventListener("mouseleave", clear);
   const wave = $(".wave");
-  wave.addEventListener("pointerdown", e => { if (e.pointerType === "mouse") return; hold = true; try { wave.setPointerCapture(e.pointerId); } catch (err) {} pick(e); });
-  wave.addEventListener("pointermove", e => { if (e.pointerType === "mouse" || hold) pick(e); });
-  wave.addEventListener("pointerup", e => { if (e.pointerType !== "mouse") hold = false; });   // on touch the last point stays up
-  wave.addEventListener("pointercancel", () => { hold = false; });
+  // touch: a loupe above your finger shows that part of the waveform enlarged (iOS's own text magnifier is switched off)
+  const loupe = document.createElement("canvas"); loupe.id = "wfLoupe"; document.body.appendChild(loupe);
+  function showLoupe(e) {
+    if (!S) return;
+    const r = wfc.getBoundingClientRect(), W = 150, H = 96, Z = 2.5, dpr = S.dpr;
+    if (loupe.width !== W * dpr) { loupe.width = W * dpr; loupe.height = H * dpr; }
+    const kx = wfc.width / r.width, ky = wfc.height / r.height;
+    const cx = Math.min(r.right, Math.max(r.left, e.clientX)), cy = Math.min(r.bottom, Math.max(r.top, e.clientY));
+    const sw = W / Z * kx, sh = H / Z * ky, sx = (cx - r.left) * kx - sw / 2, sy = (cy - r.top) * ky - sh / 2;
+    const lx = loupe.getContext("2d"); lx.fillStyle = "#100f0e"; lx.fillRect(0, 0, loupe.width, loupe.height);
+    lx.drawImage(wfc, sx, sy, sw, sh, 0, 0, loupe.width, loupe.height);
+    loupe.style.left = Math.min(innerWidth - W - 6, Math.max(6, e.clientX - W / 2)) + "px";
+    loupe.style.top = Math.max(6, e.clientY - H - 40) + "px";
+    loupe.classList.add("on");
+  }
+  const hideLoupe = () => loupe.classList.remove("on");
+  wave.addEventListener("pointerdown", e => { if (e.pointerType === "mouse") return; hold = true; try { wave.setPointerCapture(e.pointerId); } catch (err) {} pick(e); showLoupe(e); });
+  wave.addEventListener("pointermove", e => { if (e.pointerType === "mouse" || hold) pick(e); if (hold && e.pointerType !== "mouse") showLoupe(e); });
+  wave.addEventListener("pointerup", e => { if (e.pointerType !== "mouse") { hold = false; hideLoupe(); } });   // on touch the last point stays up
+  wave.addEventListener("pointercancel", () => { hold = false; hideLoupe(); });
   wave.addEventListener("pointerleave", e => { if (e.pointerType === "mouse") clear(); });
   $("#lb").addEventListener("scroll", () => dot.classList.remove("on"));
   let rt = 0; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { if (S && S.img) build(S.img); }, 200); });
