@@ -714,7 +714,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-20 · scopes-touch 6";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-20 · scopes-touch 7";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1015,15 +1015,23 @@ const Scope = (() => {
 
   // hover the picture: marker on the trace, crosshair on the scope, readout for that pixel
   function probe(e) {
+    fit();
     if (!S) return; const r = $("#lbimg").getBoundingClientRect(), fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
     if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return clear();
     const k = Math.min(S.sh - 1, Math.floor(fy * S.sh)) * S.sw + Math.min(S.sw - 1, Math.floor(fx * S.sw));
     drawWave(fx, S.Y[k]); drawScope(pixel(k)); readout(pixel(k), "Pixel");
   }
   // point at the trace: the matching pixel lights up in the picture
+  // the scopes move between the sheet and the overlay (different sizes): redraw if the drawing no longer matches the screen
+  function fit() {
+    if (!S || !S.img) return;
+    const r = wfc.getBoundingClientRect();
+    if (r.height && (Math.abs(r.height * S.dpr - S.H) > 2 || Math.abs(r.width * S.dpr - S.W) > 2)) build(S.img);
+  }
   function pick(e) {
+    fit();
     if (!S) return; const r = wfc.getBoundingClientRect(), fx = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    const l = Math.min(1, Math.max(0, 1 - ((e.clientY - r.top) * S.dpr - S.pad) / (S.H - 2 * S.pad)));
+    const l = Math.min(1, Math.max(0, 1 - ((e.clientY - r.top) * (S.H / r.height) - S.pad) / (S.H - 2 * S.pad)));
     const cx = Math.min(S.sw - 1, Math.floor(fx * S.sw)); let best = -1, bd = 9;
     for (let y = 0; y < S.sh; y++) { const dl = Math.abs(S.Y[y * S.sw + cx] - l);
       if (dl < bd - 0.004 || (Math.abs(dl - bd) <= 0.004 && last >= 0 && Math.abs(y - last) < Math.abs(best - last))) { bd = dl; best = y; } }
@@ -1571,7 +1579,7 @@ const Phone = (() => {
   let g = null, tapTimer = 0, tapAt = 0, probing = false;
   stage.addEventListener("touchstart", e => {
     if (!M() || current < 0) return;
-    if (e.target.closest("button, #dropHint")) { g = null; return; }
+    if (e.target.closest("button, #dropHint, #scopeHud")) { g = null; return; }   // the scopes overlay handles its own touches
     if (e.touches.length > 1) { if (g) { g.multi = true; resetTrack(); } return; }
     const t = e.touches[0];
     g = { x: t.clientX, y: t.clientY, t: Date.now(), axis: null, dx: 0, dy: 0, multi: false, zoomed: lbZoom.zoomed(), dbl: false, probe: false, last: t };
