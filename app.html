@@ -726,7 +726,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-20 · open-in 1";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-20 · repin 1";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1372,7 +1372,7 @@ $("#lb .stage").addEventListener("touchend", e => {
 // under an open photo; do that when it closes.
 let vpT1 = 0, vpT2 = 0, wasPhone = PHONE.matches, gridStale = false;
 function settleViewport() {
-  applyMode(); applyCols();
+  applyMode(); applyCols(); repin();
   if (M() !== wasPhone) { wasPhone = M(); if ($("#lb").classList.contains("open")) gridStale = true; else refresh(); }
   if (typeof Phone !== "undefined") Phone.relayout();
 }
@@ -1384,6 +1384,21 @@ PHONE.addEventListener("change", onViewportChange);
 LAND.addEventListener("change", onViewportChange);
 addEventListener("orientationchange", onViewportChange);
 if (window.visualViewport) visualViewport.addEventListener("resize", onViewportChange);
+// iOS: after the keyboard or a system sheet (share sheet, sign-in) closes, things pinned to the bottom of the screen
+// (tab bar, toolbar) can stay where the bottom used to be. A one-pixel scroll and back makes iOS re-place them.
+function repin() {
+  if (!M()) return;
+  requestAnimationFrame(() => {
+    const x = window.scrollX, y = window.scrollY;
+    window.scrollTo(x, y + 1); window.scrollTo(x, y);
+    document.body.style.minHeight = "calc(100% + 0.5px)"; void document.body.offsetHeight; document.body.style.minHeight = "";
+  });
+}
+let repinT = 0; const repinSoon = () => { clearTimeout(repinT); repinT = setTimeout(repin, 250); };
+addEventListener("focus", repinSoon); addEventListener("pageshow", repinSoon);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) repinSoon(); });
+document.addEventListener("focusout", e => { if (e.target.matches && e.target.matches("input, textarea, select")) repinSoon(); });   // keyboard closed
+if (window.visualViewport) visualViewport.addEventListener("resize", repinSoon);
 $("#lb").addEventListener("click", e => { if (!M() && e.target.classList.contains("stage")) closeLb(); });
 document.addEventListener("keydown", e => {
   if ($("#picker").classList.contains("open")) { if (e.key === "Escape") closePicker(); return; }
