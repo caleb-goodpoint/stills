@@ -622,7 +622,7 @@ body:not(.m) .back { font-family: var(--sans); }
       <button id="bRotL" title="Rotate left (Shift+R)">↺ Rotate</button>
       <button id="bRotR" title="Rotate right (R)">↻ Rotate</button>
       <button id="bReveal">Show in Finder</button>
-      <div class="openIn" id="openIn"><button id="bOpenIn" title="Open the original file in…">Open in ▾</button><div class="oiMenu" id="oiMenu"><button data-app="lightroom">Lightroom</button><button data-app="photoshop">Photoshop</button></div></div>
+      <div class="openIn" id="openIn"><button id="bOpenIn" title="Open the original file in…">Open in ▾</button><div class="oiMenu" id="oiMenu"><button data-app="lightroom">Lightroom</button><button data-app="photoshop">Photoshop</button><button data-app="resolve">DaVinci Resolve</button></div></div>
       <button id="bCopy">Copy path</button>
       <button id="bProj">More from this project</button>
       <button id="bBoard">＋ Add to board</button>
@@ -727,7 +727,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-20 · ring-clear 1";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-21 · resolve 1";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1322,13 +1322,18 @@ $("#bReveal").style.display = "none"; $("#openIn").style.display = "none";
 if (SERVED) fetch("whoami", { cache: "no-store" }).then(r => r.json()).then(j => { ON_MAC = !!j.mac; if (j.mac) { $("#bReveal").style.display = ""; if (!M()) $("#openIn").style.display = ""; } }).catch(() => {});
 // Open in ▾ (Mac): the ORIGINAL file goes to Lightroom (Add Photos) or Photoshop
 const OPEN_DONE = { lightroom: "Sent to Lightroom: click Add Photos there", photoshop: "Opened in Photoshop" };
+const OPEN_WAIT = { resolve: "Making a Resolve project… (Resolve may take a minute to open)" };
 $("#bOpenIn").onclick = e => { e.stopPropagation(); $("#oiMenu").classList.toggle("on"); };
 $("#oiMenu").addEventListener("click", e => {
   const b = e.target.closest("button[data-app]"); if (!b || current < 0) return;
   e.stopPropagation(); $("#oiMenu").classList.remove("on");
-  const app = b.dataset.app, name = b.textContent; toast(`Opening in ${name}…`);
-  fetch(`open/${view[current].id}?app=${app}`, { method: "POST" })
-    .then(r => r.ok ? toast(OPEN_DONE[app], 3000) : r.json().catch(() => ({})).then(j => toast(`Couldn't open ${name}` + (j.error ? ": " + j.error : ""), 4000)), () => toast("Server not reachable"));
+  const app = b.dataset.app, name = b.textContent, s = view[current];
+  toast(OPEN_WAIT[app] || `Opening in ${name}…`, OPEN_WAIT[app] ? 60000 : 1400);
+  fetch(`open/${s.id}?app=${app}&label=${encodeURIComponent(s.proj)}`, { method: "POST" })
+    .then(r => r.status === 204 ? toast(OPEN_DONE[app], 3000)
+      : r.json().catch(() => ({})).then(j => j.ok ? toast(`Resolve: project “${j.project}”, timeline ${j.timeline}` + (j.note ? ` · ${j.note}` : ""), 6000)
+                                               : toast(`Couldn't open ${name}` + (j.error ? ": " + j.error : ""), 8000)),
+      () => toast("Server not reachable"));
 });
 document.addEventListener("click", e => { if (!e.target.closest("#openIn")) $("#oiMenu").classList.remove("on"); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") $("#oiMenu").classList.remove("on"); }, true);
