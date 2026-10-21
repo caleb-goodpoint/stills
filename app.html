@@ -208,7 +208,7 @@ body.m #lb .side { position: fixed; left: 0; right: 0; bottom: 52px; z-index: 3;
 body.m #lb .side.full { overflow-y: auto; touch-action: pan-y; }
 body.m .grab { display: block; position: sticky; top: 0; z-index: 1; height: 24px; margin: 0 -16px 2px; background: rgb(23,23,26); }
 body.m .grab::before { content: ""; position: absolute; left: 50%; top: 8px; width: 38px; height: 5px; margin-left: -19px; border-radius: 3px; background: #4a4a50; }
-body.m #bRotR, body.m #bProj, body.m #bSimilar, body.m #bFull { display: none !important; }
+body.m #bRotR, body.m #bProj, body.m #bSimilar, body.m #bFull, body.m #bLightroom { display: none !important; }
 body.m #lbBar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; padding: 0 4px env(safe-area-inset-bottom);
   background: rgba(14,14,15,.94); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid var(--line); transition: opacity .2s; }
 body.m #lbBar button { color: var(--text); }
@@ -611,6 +611,7 @@ body:not(.m) .back { font-family: var(--sans); }
       <button id="bRotL" title="Rotate left (Shift+R)">↺ Rotate</button>
       <button id="bRotR" title="Rotate right (R)">↻ Rotate</button>
       <button id="bReveal">Show in Finder</button>
+      <button id="bLightroom" title="Open the original in Lightroom (Add Photos)">Open in Lightroom</button>
       <button id="bCopy">Copy path</button>
       <button id="bProj">More from this project</button>
       <button id="bBoard">＋ Add to board</button>
@@ -628,6 +629,7 @@ body:not(.m) .back { font-family: var(--sans); }
     <button data-a="sim"><svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="5.5"/><circle cx="15" cy="12" r="5.5"/></svg>Similar</button>
     <button data-a="proj"><svg viewBox="0 0 24 24"><path d="M3 7.5A2 2 0 0 1 5 5.5h4l2 2h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Project</button>
     <button data-a="full" id="lbBarFull"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Full-res</button>
+    <button data-a="share" id="lbBarShare"><svg viewBox="0 0 24 24"><path d="M12 3.5v11M8 7.5l4-4 4 4"/><path d="M7 10.5H5.5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1H17"/></svg>Share</button>
     <button data-a="scopes"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M6.5 15.5l2.5-5 2.5 3.5 2.5-6 2.5 7.5"/></svg>Scopes</button>
     <button data-a="info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.6v.2"/></svg>Info</button>
   </div>
@@ -714,7 +716,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-20 · scopes-touch 8";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-20 · share 1";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1305,8 +1307,12 @@ let toastT = 0;
 function toast(msg, ms = 1400) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), ms); }
 // Show in Finder: the library server on this Mac reveals the original (hidden on the phone / file version).
 // The server says whether this browser is on the Mac (any address: localhost, Wi-Fi IP, Tailscale).
-$("#bReveal").style.display = "none";
-if (SERVED) fetch("whoami", { cache: "no-store" }).then(r => r.json()).then(j => { ON_MAC = !!j.mac; if (j.mac) $("#bReveal").style.display = ""; }).catch(() => {});
+$("#bReveal").style.display = "none"; $("#bLightroom").style.display = "none";
+if (SERVED) fetch("whoami", { cache: "no-store" }).then(r => r.json()).then(j => { ON_MAC = !!j.mac; if (j.mac) { $("#bReveal").style.display = ""; if (!M()) $("#bLightroom").style.display = ""; } }).catch(() => {});
+$("#bLightroom").onclick = () => {
+  if (current < 0) return; toast("Opening in Lightroom…");
+  fetch("lightroom/" + view[current].id, { method: "POST" }).then(r => r.ok ? toast("Sent to Lightroom: click Add Photos there", 3000) : r.json().catch(() => ({})).then(j => toast("Couldn't open Lightroom" + (j.error ? ": " + j.error : ""), 4000)), () => toast("Server not reachable"));
+};
 $("#bReveal").onclick = () => fetch("reveal/" + view[current].id, { method: "POST" })
   .then(r => toast(r.ok ? "Shown in Finder" : r.status === 404 ? "File not found (moved?)" : "Couldn't open Finder"), () => toast("Server not reachable"));
 // Rotate (non-destructive): saved per still, shared Mac <-> phone through the server.
@@ -1542,7 +1548,28 @@ const Phone = (() => {
     rotatedURL(th, d).then(u => { if (img._tk === tk && !got) img.src = u; });
     if (src) rotatedURL(src, d).then(u => { const im = new Image(); im.onload = () => { if (!d) fullReady.add(u); if (img._tk === tk) { got = true; img.src = u; } }; im.src = u; });
   }
+  // Share (iPhone share sheet -> Lightroom, AirDrop, Messages…): the full-res frame is fetched when the photo opens,
+  // because iOS only lets a page share during the tap itself
+  const shareFiles = new Map();
+  const canShareFiles = () => { try { return !!(navigator.canShare && navigator.canShare({ files: [new File([""], "x.jpg", { type: "image/jpeg" })] })); } catch (e) { return false; } };
+  function prepShare(s) {
+    if (!s || shareFiles.has(s.id) || !canShareFiles()) return;
+    shareFiles.set(s.id, null);
+    const src = fullSrc(s) || thumb(s);
+    rotatedURL(src, rot(s)).then(u => fetch(u)).then(r => r.blob()).then(b => {
+      const name = `${s.proj}_${s.file.replace(/\.[^.]+$/, "")}.jpg`.replace(/[\\/:*?"<>|]+/g, "-");
+      shareFiles.set(s.id, new File([b], name, { type: "image/jpeg" }));
+      while (shareFiles.size > 4) shareFiles.delete(shareFiles.keys().next().value);
+    }).catch(() => shareFiles.delete(s.id));
+  }
+  function share() {
+    const s = view[current], f = shareFiles.get(s.id);
+    if (!f) { prepShare(s); return toast("Getting the full-res frame ready… tap Share again in a moment", 2500); }
+    navigator.share({ files: [f], title: s.proj }).catch(e => { if (e.name !== "AbortError") toast("Couldn't share: " + e.message, 3000); });
+  }
   function opened(i, fresh) {
+    $("#lbBarShare").style.display = canShareFiles() ? "" : "none";
+    prepShare(view[i]);
     document.body.classList.add("lb-open");
     if (fresh) { detent = "peek"; setDropper(false); lb.classList.remove("bare"); }
     const n = view.length;
@@ -1665,7 +1692,7 @@ const Phone = (() => {
   bar.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b || current < 0) return;
     ({ drop: () => setDropper(!dropOn), rot: () => turn(90), sim: () => $("#bSimilar").click(), proj: () => $("#bProj").click(),
-       full: () => $("#bFull").click(), board: () => openPicker(), scopes: () => setHud(!hud),
+       full: () => $("#bFull").click(), board: () => openPicker(), scopes: () => setHud(!hud), share: () => share(),
        info: () => { if (hud) setHud(false); setDetent(detent === "peek" ? "half" : "peek"); } })[b.dataset.a]();
   });
   $("#dropDone").onclick = () => setDropper(false);
