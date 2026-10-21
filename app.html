@@ -287,6 +287,7 @@ body.m #lbpal { order: 5; } body.m #palHint { order: 6; } body.m #lb .side .scop
 body.m #lb .btns { order: 10; } body.m #lbpath { order: 11; } body.m #lbstat { order: 12; }
 /* ---- phone, turned sideways: full picture, icon toolbar, info as a right-hand panel ---- */
 #scopeHud, #fvClose { display: none; }
+.under-ring { opacity: .1 !important; pointer-events: none !important; transition: opacity .12s; }
 /* scopes: no text selection (a firm press on iOS selected the waveform and showed its own magnifier) */
 .scopes, .scopes * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 #wfLoupe { position: fixed; z-index: 30; width: 150px; height: 96px; border-radius: 48px; border: 2px solid rgba(255,255,255,.85);
@@ -726,7 +727,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-20 · repin 1";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-20 · ring-clear 1";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1491,6 +1492,19 @@ $("#grid").addEventListener("touchmove", e => {
 $("#grid").addEventListener("touchend", e => { if (e.touches.length < 2) gp = null; });
 let colT = 0; addEventListener("resize", () => { clearTimeout(colT); colT = setTimeout(() => { if (M()) applyCols(); }, 200); });
 
+
+// When the reading ring sits under the Back button or the frame counter, fade them so the spot stays visible
+(() => {
+  const dot = $("#wfDot"), els = ["#lbBack", "#lbCount", "#dropHint"].map(q => $(q));
+  const check = () => {
+    const on = dot.classList.contains("on") && $("#lb").classList.contains("open"), r = on ? dot.getBoundingClientRect() : null;
+    for (const el of els) {
+      const b = el.getBoundingClientRect(), hit = !!r && b.width > 0 && !(r.right < b.left - 6 || r.left > b.right + 6 || r.bottom < b.top - 6 || r.top > b.bottom + 6);
+      el.classList.toggle("under-ring", hit);
+    }
+  };
+  new MutationObserver(check).observe(dot, { attributes: true, attributeFilter: ["style", "class"] });
+})();
 
 // Touch readout (tap the Page line in Details): shows what the picture receives, to debug on a real phone
 const Dbg = (() => {
