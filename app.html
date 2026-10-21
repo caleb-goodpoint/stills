@@ -709,7 +709,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-20 · scopes-touch 4";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-20 · scopes-touch 5";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1023,7 +1023,9 @@ const Scope = (() => {
     for (let y = 0; y < S.sh; y++) { const dl = Math.abs(S.Y[y * S.sw + cx] - l);
       if (dl < bd - 0.004 || (Math.abs(dl - bd) <= 0.004 && last >= 0 && Math.abs(y - last) < Math.abs(best - last))) { bd = dl; best = y; } }
     if (best < 0) return; last = best; const k = best * S.sw + cx, ir = $("#lbimg").getBoundingClientRect();
-    dot.style.left = (ir.left + (cx + 0.5) / S.sw * ir.width) + "px"; dot.style.top = (ir.top + (best + 0.5) / S.sh * ir.height) + "px"; dot.classList.add("on");
+    const px = pixel(k);
+    dot.style.left = (ir.left + (cx + 0.5) / S.sw * ir.width) + "px"; dot.style.top = (ir.top + (best + 0.5) / S.sh * ir.height) + "px";
+    dot.style.background = `rgb(${px.join(",")})`; dot.classList.add("on");      // the ring shows the color it's sitting on
     drawWave(fx, S.Y[k]); drawScope(pixel(k)); readout(pixel(k), "Pixel");
   }
   $("#lbimg").addEventListener("mousemove", probe);
