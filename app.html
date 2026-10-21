@@ -208,7 +208,7 @@ body.m #lb .side { position: fixed; left: 0; right: 0; bottom: 52px; z-index: 3;
 body.m #lb .side.full { overflow-y: auto; touch-action: pan-y; }
 body.m .grab { display: block; position: sticky; top: 0; z-index: 1; height: 24px; margin: 0 -16px 2px; background: rgb(23,23,26); }
 body.m .grab::before { content: ""; position: absolute; left: 50%; top: 8px; width: 38px; height: 5px; margin-left: -19px; border-radius: 3px; background: #4a4a50; }
-body.m #bRotR, body.m #bProj, body.m #bSimilar, body.m #bFull, body.m #bLightroom { display: none !important; }
+body.m #bRotR, body.m #bProj, body.m #bSimilar, body.m #bFull, body.m #openIn { display: none !important; }
 body.m #lbBar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; padding: 0 4px env(safe-area-inset-bottom);
   background: rgba(14,14,15,.94); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid var(--line); transition: opacity .2s; }
 body.m #lbBar button { color: var(--text); }
@@ -334,6 +334,16 @@ body.m.land #lb.hud .side { transform: translateX(110%) !important; }
 #fv #fvClose { display: inline-flex; left: auto; right: calc(12px + env(safe-area-inset-right)); }
 body.land #fvHint { display: none; }
 
+
+/* Open in ▾ menu (Mac) */
+.openIn { position: relative; display: flex; }
+.openIn > button { flex: 1; }
+.oiMenu { display: none; position: absolute; z-index: 6; top: calc(100% + 4px); left: 0; min-width: 100%; padding: 4px;
+  background: var(--d-raise, #161618); border: 1px solid var(--d-line2, #2a2a2f); border-radius: 9px; box-shadow: 0 12px 30px rgba(0,0,0,.5); }
+.oiMenu.on { display: block; }
+body:not(.m) #lb .btns .oiMenu button { display: block; width: 100%; min-height: 0; text-align: left; justify-content: flex-start; background: none; border: 0; border-radius: 6px;
+  padding: 8px 10px; font-size: 12.5px; color: var(--d-text, #ecebe7); }
+body:not(.m) #lb .btns .oiMenu button:hover { background: rgba(255,255,255,.07); color: var(--accent); }
 /* ================= Desktop (Mac) design: sidebar · gallery · screening-room viewer ================= */
 #side, .size, #strip { display: none; }
 body:not(.m) {
@@ -611,7 +621,7 @@ body:not(.m) .back { font-family: var(--sans); }
       <button id="bRotL" title="Rotate left (Shift+R)">↺ Rotate</button>
       <button id="bRotR" title="Rotate right (R)">↻ Rotate</button>
       <button id="bReveal">Show in Finder</button>
-      <button id="bLightroom" title="Open the original in Lightroom (Add Photos)">Open in Lightroom</button>
+      <div class="openIn" id="openIn"><button id="bOpenIn" title="Open the original file in…">Open in ▾</button><div class="oiMenu" id="oiMenu"><button data-app="lightroom">Lightroom</button><button data-app="photoshop">Photoshop</button></div></div>
       <button id="bCopy">Copy path</button>
       <button id="bProj">More from this project</button>
       <button id="bBoard">＋ Add to board</button>
@@ -716,7 +726,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-20 · share 1";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-20 · open-in 1";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1307,12 +1317,20 @@ let toastT = 0;
 function toast(msg, ms = 1400) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), ms); }
 // Show in Finder: the library server on this Mac reveals the original (hidden on the phone / file version).
 // The server says whether this browser is on the Mac (any address: localhost, Wi-Fi IP, Tailscale).
-$("#bReveal").style.display = "none"; $("#bLightroom").style.display = "none";
-if (SERVED) fetch("whoami", { cache: "no-store" }).then(r => r.json()).then(j => { ON_MAC = !!j.mac; if (j.mac) { $("#bReveal").style.display = ""; if (!M()) $("#bLightroom").style.display = ""; } }).catch(() => {});
-$("#bLightroom").onclick = () => {
-  if (current < 0) return; toast("Opening in Lightroom…");
-  fetch("lightroom/" + view[current].id, { method: "POST" }).then(r => r.ok ? toast("Sent to Lightroom: click Add Photos there", 3000) : r.json().catch(() => ({})).then(j => toast("Couldn't open Lightroom" + (j.error ? ": " + j.error : ""), 4000)), () => toast("Server not reachable"));
-};
+$("#bReveal").style.display = "none"; $("#openIn").style.display = "none";
+if (SERVED) fetch("whoami", { cache: "no-store" }).then(r => r.json()).then(j => { ON_MAC = !!j.mac; if (j.mac) { $("#bReveal").style.display = ""; if (!M()) $("#openIn").style.display = ""; } }).catch(() => {});
+// Open in ▾ (Mac): the ORIGINAL file goes to Lightroom (Add Photos) or Photoshop
+const OPEN_DONE = { lightroom: "Sent to Lightroom: click Add Photos there", photoshop: "Opened in Photoshop" };
+$("#bOpenIn").onclick = e => { e.stopPropagation(); $("#oiMenu").classList.toggle("on"); };
+$("#oiMenu").addEventListener("click", e => {
+  const b = e.target.closest("button[data-app]"); if (!b || current < 0) return;
+  e.stopPropagation(); $("#oiMenu").classList.remove("on");
+  const app = b.dataset.app, name = b.textContent; toast(`Opening in ${name}…`);
+  fetch(`open/${view[current].id}?app=${app}`, { method: "POST" })
+    .then(r => r.ok ? toast(OPEN_DONE[app], 3000) : r.json().catch(() => ({})).then(j => toast(`Couldn't open ${name}` + (j.error ? ": " + j.error : ""), 4000)), () => toast("Server not reachable"));
+});
+document.addEventListener("click", e => { if (!e.target.closest("#openIn")) $("#oiMenu").classList.remove("on"); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") $("#oiMenu").classList.remove("on"); }, true);
 $("#bReveal").onclick = () => fetch("reveal/" + view[current].id, { method: "POST" })
   .then(r => toast(r.ok ? "Shown in Finder" : r.status === 404 ? "File not found (moved?)" : "Couldn't open Finder"), () => toast("Server not reachable"));
 // Rotate (non-destructive): saved per still, shared Mac <-> phone through the server.
