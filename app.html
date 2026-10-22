@@ -510,9 +510,28 @@ body:not(.m) .back { font-family: var(--sans); }
   body:not(.m) #q { flex-basis: 220px; width: 220px; }
   body:not(.m) #lb { grid-template-columns: minmax(0, 1fr) 340px; }
 }
+/* opening: the mark while the library loads (a bar only if it's slow, e.g. the very first open) */
+#boot { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  transition: opacity .28s ease, visibility .28s; }
+#boot.gone { opacity: 0; visibility: hidden; }
+#boot svg { width: 56px; height: 56px; color: var(--accent); animation: bootIn .5s ease both; }
+#boot .word { font: 600 12px/1 "Geist Mono", ui-monospace, monospace; letter-spacing: .36em; text-transform: uppercase; margin-right: -.36em; animation: bootIn .5s .08s ease both; }
+#boot .bar { width: 96px; height: 2px; border-radius: 2px; background: var(--line); overflow: hidden; opacity: 0; animation: bootIn .4s 1.2s ease forwards; }
+#boot .bar i { display: block; width: 40%; height: 100%; background: var(--accent); border-radius: 2px; animation: bootBar 1.1s ease-in-out infinite; }
+#boot .note { font-size: 12px; color: var(--muted); min-height: 16px; opacity: 0; animation: bootIn .4s 3s ease forwards; }
+@keyframes bootIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes bootBar { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+/* something newer arrived in the background: tap to load it */
+#upd { position: fixed; z-index: 120; left: 50%; top: calc(env(safe-area-inset-top) + 12px); transform: translate(-50%, -140%); transition: transform .3s ease;
+  display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: rgba(23,23,26,.92);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); color: var(--text); font: 500 13px/1 inherit; box-shadow: 0 8px 24px rgba(0,0,0,.45); cursor: pointer; }
+#upd.on { transform: translate(-50%, 0); }
+#upd b { color: var(--accent); font-weight: 600; }
 </style>
 </head>
 <body>
+<div id="boot" aria-label="Loading"><svg viewBox="0 0 512 512" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"><path d="M96 196 V160 H150"/><path d="M362 160 H416 V196"/><path d="M416 316 V352 H362"/><path d="M150 352 H96 V316"/></g></svg><div class="word">Stills</div><div class="bar"><i></i></div><div class="note">Getting the library from Dropbox…</div></div>
+<script>setTimeout(() => { const b = document.getElementById("boot"); if (b) b.classList.add("gone"); }, 30000);   // never stuck behind it</script>
 <aside id="side">
   <div class="brand" role="button" tabindex="0" title="Show the whole library"><svg viewBox="0 0 512 512" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"><path d="M96 196 V160 H150"/><path d="M362 160 H416 V196"/><path d="M416 316 V352 H362"/><path d="M150 352 H96 V316"/></g></svg><span>Stills</span></div>
   <nav class="lib">
@@ -727,7 +746,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-22 · loupe smaller";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-22 · fast open 1";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1890,12 +1909,25 @@ if (!SERVED) {
   $("header").appendChild(b);
 }
 
+const bootDone = () => { const b = $("#boot"); b.classList.add("gone"); setTimeout(() => b.remove(), 400); };
 if (!ALL.length) {
   $("#grid").innerHTML = '<div class="empty">No index yet. Run <code>python3 ~/Dropbox/0_KIT/bin/stills_index.py</code></div>';
+  bootDone();
 } else {
   setup(); if (HAS_TAGS) $(".filters").classList.add("has-tags");
-  Promise.all([loadRotations(), loadBoards()]).then(refresh);
+  Promise.all([loadRotations(), loadBoards()]).then(refresh).finally(bootDone);
 }
+
+// Hosted: the app opens from the phone's saved copy; the helper says when a newer page or library has arrived.
+if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener("message", e => {
+  const m = e.data || {};
+  if (m.type === "signin") return location.replace("./?signin");
+  if (m.type !== "updated") return;
+  let u = $("#upd");
+  if (!u) { u = document.createElement("button"); u.id = "upd"; u.onclick = () => location.reload(); document.body.appendChild(u); }
+  u.innerHTML = (m.what === "data" ? "New frames in the library" : "Update ready") + " <b>Reload</b>";
+  requestAnimationFrame(() => u.classList.add("on"));
+});
 </script>
 </body>
 </html>

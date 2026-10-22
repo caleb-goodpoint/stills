@@ -4,7 +4,9 @@
 const APP_KEY = "xtkvkqi52cun78t";
 const ROOT = "/library";
 const API = "https://api.dropboxapi.com/2/", CONTENT = "https://content.dropboxapi.com/2/";
-const C_THUMBS = "stills-thumbs-v1", C_FULL = "stills-full-v1", C_DATA = "stills-data-v1";
+const C_THUMBS = "stills-thumbs-v1", C_FULL = "stills-full-v1", C_DATA = "stills-data-v1", C_PAGE = "stills-page-v1";
+// the open page hears when something newer arrived in the background ("updated") or Dropbox wants a new sign-in
+const tell = async msg => { for (const c of await self.clients.matchAll()) c.postMessage(msg); };
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
@@ -59,19 +61,53 @@ async function readJSON(path, dflt) {
 }
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
-// ---- the library data (data.js), re-downloaded only when it changed ----
-async function dataJS() {
-  const cache = await caches.open(C_DATA), hit = await cache.match("data.js");
-  let rev = null;
-  try { const m = await rpc("files/get_metadata", { path: ROOT + "/data.js.gz" }); if (m.ok) rev = (await m.json()).rev; }
-  catch (e) { if (e.message === "signin") throw e; }      // offline: use what we have
-  if (hit && (!rev || hit.headers.get("x-rev") === rev)) return hit;
+// ---- the library data (data.js): opens from the phone's copy at once; a newer one is fetched in the background ----
+async function newData(cache, haveRev) {
+  const m = await rpc("files/get_metadata", { path: ROOT + "/data.js.gz" });
+  if (!m.ok) throw new Error("data " + m.status);
+  const rev = (await m.json()).rev;
+  if (rev === haveRev) return null;
   const r = await download("/data.js.gz");
-  if (!r.ok) { if (hit) return hit; throw new Error("data " + r.status); }
+  if (!r.ok) throw new Error("data " + r.status);
   const js = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text();
-  const resp = new Response(js, { headers: { "Content-Type": "application/javascript", "x-rev": rev || "" } });
+  const resp = new Response(js, { headers: { "Content-Type": "application/javascript", "x-rev": rev } });
   await cache.put("data.js", resp.clone());
   return resp;
+}
+async function dataJS(e) {
+  const cache = await caches.open(C_DATA), hit = await cache.match("data.js");
+  if (!hit) return newData(cache, null);
+  e.waitUntil(newData(cache, hit.headers.get("x-rev"))
+    .then(r => r && tell({ type: "updated", what: "data" }))
+    .catch(err => err.message === "signin" && tell({ type: "signin" })));
+  return hit;
+}
+
+// ---- boards, picks, rotations, jobs: Dropbox's copy if it answers within a moment, else the last one seen ----
+async function remember(key, o) { await (await caches.open(C_DATA)).put("state/" + key, json(o)); return o; }
+async function cachedJSON(key, load, e) {
+  const hit = await (await caches.open(C_DATA)).match("state/" + key);
+  const net = load().then(o => remember(key, o)).then(o => json(o));
+  if (!hit) return net;
+  e.waitUntil(net.catch(() => {}));
+  return Promise.race([net.catch(() => hit), new Promise(r => setTimeout(() => r(hit), 1200))]);
+}
+
+// ---- the page itself: from the phone's copy, checked against GitHub in the background ----
+async function appPage(e, scope) {
+  const a = await kvGet("auth");
+  if (!a || !a.refresh) return Response.redirect(scope.href, 302);              // not signed in: the sign-in page
+  const cache = await caches.open(C_PAGE), hit = await cache.match("app.html"), oldText = hit && hit.clone().text();
+  const net = fetch(new URL("app.html", scope), { cache: "no-cache" }).then(async r => {
+    if (!r.ok) return r;
+    const text = await r.clone().text();
+    await cache.put("app.html", r.clone());
+    if (hit && text !== await oldText) tell({ type: "updated", what: "page" });
+    return r;
+  });
+  if (!hit) return net;
+  e.waitUntil(net.catch(() => {}));
+  return hit;
 }
 
 // ---- thumbnails: 25 per request (Dropbox thumbnail batches), kept on the phone after the first look ----
@@ -123,6 +159,7 @@ async function setPicks(id, body) {
   const p = await readJSON("/state/picks.json", {});
   if (cols.length) p[id] = cols; else delete p[id];
   const r = await upload("/state/picks.json", JSON.stringify(p, null, 1));
+  if (r.ok) await remember("picks.json", p);
   return new Response(null, { status: r.ok ? 204 : 500 });
 }
 async function setRotation(id, body) {
@@ -131,6 +168,7 @@ async function setRotation(id, body) {
   const p = await readJSON("/state/rotations.json", {});
   if (deg) p[id] = deg; else delete p[id];
   const r = await upload("/state/rotations.json", JSON.stringify(p, null, 1));
+  if (r.ok) await remember("rotations.json", p);
   return new Response(null, { status: r.ok ? 204 : 500 });
 }
 function slugify(name, taken) {
@@ -155,17 +193,18 @@ async function boardOp(body) {
     if (body.op !== "delete") { L.splice(L.indexOf(x), 1); L.unshift(x); }
   }
   const r = await upload("/state/boards.json", JSON.stringify(b, null, 1));
+  if (r.ok) await remember("boards.json", b);
   return r.ok ? json(b) : json({ error: "couldn't save to Dropbox" }, 500);
 }
 
 // ---- routing: the page asks for the same addresses the Mac serves ----
-async function route(p, req) {
+async function route(p, req, e) {
   const get = req.method === "GET";
-  if (get && p === "data.js") return dataJS();
+  if (get && p === "data.js") return dataJS(e);
   if (get && p.startsWith("thumbs/")) return thumbResp(req, p.slice(7).replace(/\.jpg.*$/, ""));
   if (get && p.startsWith("orig/")) return fullResp(req, p.slice(5));
-  if (get && p in STATE) return json(await readJSON("/state/" + p, STATE[p]));
-  if (get && p === "jobs") return json(await readJSON("/jobs.json", { jobs: [] }));
+  if (get && p in STATE) return cachedJSON(p, () => readJSON("/state/" + p, STATE[p]), e);
+  if (get && p === "jobs") return cachedJSON("jobs.json", () => readJSON("/jobs.json", { jobs: [] }), e);
   if (get && p === "whoami") return json({ mac: false, hosted: true });
   if (!get && p.startsWith("picks/")) { const b = await req.json().catch(() => []); return serial(() => setPicks(p.slice(6), b)); }
   if (!get && p.startsWith("rotate/")) { const b = await req.json().catch(() => ({})); return serial(() => setRotation(p.slice(7), b)); }
@@ -180,17 +219,18 @@ self.addEventListener("fetch", e => {
   const u = new URL(e.request.url), scope = new URL(self.registration.scope);
   if (u.origin !== scope.origin || !u.pathname.startsWith(scope.pathname)) return;
   const p = u.pathname.slice(scope.pathname.length);
-  if (p === "app.html" && e.request.mode === "navigate") {           // not signed in: go to the sign-in page
-    // always ask GitHub whether the page changed (phones otherwise keep a saved copy for a while)
-    e.respondWith(kvGet("auth").then(a => a && a.refresh ? fetch(e.request, { cache: "no-cache" }) : Response.redirect(scope.href, 302)));
+  if (p === "app.html" && e.request.mode === "navigate") {
+    e.respondWith(appPage(e, scope).catch(() => fetch(e.request, { cache: "no-cache" })));
     return;
   }
   if ((p === "" || p === "index.html") && e.request.mode === "navigate") {
-    e.respondWith(fetch(e.request, { cache: "no-cache" }));
+    // signed in: straight to the library (skips a page load); ?signin / ?signout still reach the sign-in page
+    e.respondWith(kvGet("auth").then(a => a && a.refresh && !u.search
+      ? Response.redirect(new URL("app.html", scope).href, 302) : fetch(e.request, { cache: "no-cache" })));
     return;
   }
   if (!ROUTED.test(p)) return;                                      // the page, icons, manifest: from GitHub Pages
-  e.respondWith(route(p, e.request).then(r => r || fetch(e.request)).catch(err => {
+  e.respondWith(route(p, e.request, e).then(r => r || fetch(e.request)).catch(err => {
     if (err.message === "signin") return p === "data.js"
       ? new Response('location.replace("./?signin")', { headers: { "Content-Type": "application/javascript" } })
       : json({ error: "Sign in again" }, 401);
