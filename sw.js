@@ -197,6 +197,25 @@ async function boardOp(body) {
   return r.ok ? json(b) : json({ error: "couldn't save to Dropbox" }, 500);
 }
 
+// ---- Grab Stills feedback from the phone: keep / reject (swapping files needs the Mac; it applies rejects on its next run) ----
+async function grabStatus(gr) {
+  const fb = await readJSON("/state/feedback.json", { events: [] });
+  const last = fb.events.filter(e => e.gr === gr).pop();
+  return json({ hosted: true, gr, status: last ? last.action : "pick", lesson: (last && last.lesson) || "", cands: [] });
+}
+async function grabFeedback(body) {
+  const gr = String(body.gr || ""), action = body.action;
+  if (!/^\d{8}-\d{6}:\d+$/.test(gr)) return json({ error: "not a Grab Stills frame" }, 400);
+  if (action === "swap") return json({ error: "Swapping in another frame works in the library on the Mac." }, 501);
+  if (action !== "keep" && action !== "reject") return json({ error: "action must be keep or reject" }, 400);
+  const fb = await readJSON("/state/feedback.json", { events: [] });
+  const ev = { gr, action, source: "phone", at: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 19) };   // local time, like the Mac
+  if (action === "reject") ev.applied = false;
+  fb.events.push(ev);
+  const r = await upload("/state/feedback.json", JSON.stringify(fb, null, 1));
+  return r.ok ? json({ ok: true, action }) : json({ error: "couldn't save to Dropbox" }, 500);
+}
+
 // ---- routing: the page asks for the same addresses the Mac serves ----
 async function route(p, req, e) {
   const get = req.method === "GET";
@@ -206,6 +225,8 @@ async function route(p, req, e) {
   if (get && p in STATE) return cachedJSON(p, () => readJSON("/state/" + p, STATE[p]), e);
   if (get && p === "jobs") return cachedJSON("jobs.json", () => readJSON("/jobs.json", { jobs: [] }), e);
   if (get && p === "whoami") return json({ mac: false, hosted: true });
+  if (get && p.startsWith("grab/")) return grabStatus(new URL(req.url).searchParams.get("gr") || "");
+  if (!get && p.startsWith("grab/")) { const b = await req.json().catch(() => ({})); return serial(() => grabFeedback(b)); }
   if (!get && p.startsWith("picks/")) { const b = await req.json().catch(() => []); return serial(() => setPicks(p.slice(6), b)); }
   if (!get && p.startsWith("rotate/")) { const b = await req.json().catch(() => ({})); return serial(() => setRotation(p.slice(7), b)); }
   if (!get && p === "boards") { const b = await req.json().catch(() => ({})); return serial(() => boardOp(b)); }
@@ -213,7 +234,7 @@ async function route(p, req, e) {
   if (!get && p.startsWith("reveal/")) return new Response(null, { status: 403 });
   return null;
 }
-const ROUTED = /^(data\.js|thumbs\/|orig\/|picks\.json|rotations\.json|boards\.json|jobs|whoami|picks\/|rotate\/|boards|lookbook\/|reveal\/)/;
+const ROUTED = /^(data\.js|thumbs\/|orig\/|picks\.json|rotations\.json|boards\.json|jobs|whoami|picks\/|rotate\/|boards|lookbook\/|reveal\/|grab\/)/;
 
 self.addEventListener("fetch", e => {
   const u = new URL(e.request.url), scope = new URL(self.registration.scope);

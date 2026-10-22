@@ -510,6 +510,29 @@ body:not(.m) .back { font-family: var(--sans); }
   body:not(.m) #q { flex-basis: 220px; width: 220px; }
   body:not(.m) #lb { grid-template-columns: minmax(0, 1fr) 340px; }
 }
+/* Grab Stills feedback: the pick, why, the other candidates of the shot, keep / swap / reject */
+#gfb { display: none; order: 2; margin: 0 0 22px; padding: 12px; border: 1px solid rgba(232,176,74,.28); border-radius: 10px; background: rgba(232,176,74,.04); }
+#gfb.on { display: block; }
+#gfb .hd { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font: 500 10px/1.2 var(--mono, ui-monospace, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+#gfb .hd .st { color: var(--muted); letter-spacing: .08em; }
+#gfb .hd .st.keep { color: #8fd18f; } #gfb .hd .st.reject { color: #ff8a7a; } #gfb .hd .st.swap { color: var(--accent); }
+#gfb .why { margin: 8px 0 10px; font-size: 13px; line-height: 1.45; color: #e4e1db; }
+#gfb .why:empty { display: none; }
+#gfb .cands { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 5px; margin-bottom: 10px; }
+#gfb .cands button { position: relative; padding: 0; border: 0; border-radius: 5px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; cursor: pointer; outline: 1.5px solid transparent; outline-offset: 1px; }
+#gfb .cands img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .72; transition: opacity .12s; }
+#gfb .cands button:hover img, #gfb .cands button.cur img, #gfb .cands button.sel img { opacity: 1; }
+#gfb .cands button.cur { outline-color: rgba(255,255,255,.7); }
+#gfb .cands button.sel { outline-color: var(--accent); }
+#gfb .cands button span { position: absolute; left: 3px; bottom: 2px; font: 500 9px/1 var(--mono, ui-monospace, monospace); color: #fff; text-shadow: 0 1px 2px #000; }
+#gfb .cands button:disabled { cursor: default; opacity: .35; }
+#gfb .row { display: flex; gap: 6px; }
+#gfb .row button { flex: 1; padding: 8px 6px; border-radius: 8px; border: 1px solid var(--line, #2a2a2f); background: rgba(255,255,255,.04); color: #d6d4cf; font-size: 12px; cursor: pointer; }
+#gfb .row button:hover { border-color: rgba(232,176,74,.6); color: var(--accent); }
+#gfb .row button.go { background: var(--accent); border-color: var(--accent); color: #111; font-weight: 600; }
+#gfb .note { margin-top: 8px; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+#gfb .note:empty { display: none; }
+body.m #gfb { order: 4; margin: 4px 0 14px; }
 /* opening: the mark while the library loads (a bar only if it's slow, e.g. the very first open) */
 #boot { position: fixed; inset: 0; z-index: 200; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
   transition: opacity .28s ease, visibility .28s; }
@@ -621,6 +644,7 @@ body:not(.m) .back { font-family: var(--sans); }
     <button class="close" title="Close (Esc)">×</button>
     <h2 id="lbtitle"></h2>
     <div class="meta" id="lbmeta"></div>
+    <div class="gfb" id="gfb"></div>
     <div class="palhead"><span>Palette</span>
       <button id="copyAll" title="Copy every color in the chosen format"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>Copy all</button>
     </div>
@@ -746,7 +770,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-22 · fast open 1";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-22 · grab feedback 1";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1185,6 +1209,46 @@ const Pal = (() => {
   return { render, add };
 })();
 
+// ---- Grab Stills feedback: keep the pick, swap in another candidate of the shot (Mac), or reject it ----
+// Swaps teach the picker: each one becomes a one-line lesson Claude reads next time (bin/grab_feedback.py).
+let gfbTok = 0;
+function grabPanel(s) {
+  const box = $("#gfb"), tok = ++gfbTok;
+  if (!s.gr || !SERVED) { box.classList.remove("on"); box.innerHTML = ""; return; }
+  let info = { why: s.gw || "", status: "pick", cands: [] }, sel = -1;
+  const ST = { pick: "", keep: "Kept ✓", swap: "Swapped", reject: "Rejected" };
+  const draw = (note = "") => {
+    const c = info.cands || [], live = c.length > 1;
+    box.innerHTML = `<div class="hd"><span>Grab Stills pick</span><span class="st ${info.status}">${ST[info.status] || ""}</span></div>
+      <div class="why">${esc(info.why || "")}</div>
+      ${live ? `<div class="cands">${c.map(x => `<button data-k="${x.k}" class="${x.k === info.pick ? "cur" : ""}${x.k === sel ? " sel" : ""}" ${x.ok ? "" : "disabled"} title="${esc(x.tc)}${x.k === info.pick ? " · the pick" : ""}"><img src="${x.url}" alt="" loading="lazy" draggable="false"><span>${String.fromCharCode(65 + x.k)}</span></button>`).join("")}</div>` : ""}
+      <div class="row">${sel >= 0 ? `<button class="go" data-a="swap">Swap in ${String.fromCharCode(65 + sel)}</button><button data-a="cancel">Cancel</button>`
+        : `<button data-a="keep">Keep</button><button data-a="reject">Reject</button>`}</div>
+      <div class="note">${note || (info.status === "reject" ? "Moved out of the job folder (kept in the cache)." : live ? (M() ? "Tap" : "Click") + " another frame to swap it in. Swaps teach the picker." : info.hosted ? "Swapping in another frame works in the library on the Mac." : "")}</div>`;
+  };
+  box.classList.add("on"); draw();
+  fetch(`grab/${s.id}?gr=${encodeURIComponent(s.gr)}`, { cache: "no-store" }).then(r => r.ok ? r.json() : null)
+    .then(j => { if (j && tok === gfbTok) { info = Object.assign(info, j); draw(); } }).catch(() => {});
+  box.onclick = e => {
+    const c = e.target.closest(".cands button"), b = e.target.closest(".row button");
+    if (c && !c.disabled) { const k = +c.dataset.k; sel = k === info.pick ? -1 : k; draw(); if (sel >= 0) $("#lbimg").src = info.cands[k].url; else $("#lbimg").src = fullSrc(s) || thumb(s); return; }
+    if (!b) return;
+    const a = b.dataset.a;
+    if (a === "cancel") { sel = -1; $("#lbimg").src = fullSrc(s) || thumb(s); return draw(); }
+    b.disabled = true;
+    fetch(`grab/${s.id}?gr=${encodeURIComponent(s.gr)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: a, k: sel, gr: s.gr }) })
+      .then(r => r.json().then(j => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        if (tok !== gfbTok) return;
+        if (!ok) { toast(j.error || "Couldn't save that"); return draw(); }
+        info.status = a;
+        if (a === "swap") { info.pick = sel; sel = -1; toast("Swapped. The library catches up in a minute."); return draw("The new frame is in the job folder; the old one is in the cache. Claude is writing down what you preferred."); }
+        toast(a === "keep" ? "Kept" : info.hosted ? "Rejected (the Mac moves it out of the job folder on its next run)" : "Rejected");
+        draw();
+      }, () => { toast("Server not reachable"); draw(); });
+  };
+}
+
 // ---- Back navigation: browser back / Cmd+[ / swipe, the header Back button and the lightbox Back button all share history ----
 const stack = [];          // grid views to return to after "More from this project" / "Same folder" / "Similar look"
 let lbInHistory = false;   // the open lightbox has its own history entry
@@ -1294,6 +1358,7 @@ function openLb(i) {
   $("#lbmeta").textContent = `${s.year} · ${s.set} · ${s.kind}${s.dir ? " · " + s.dir : ""}`;
   Pal.render(s);
   $("#lbdesc").textContent = s.desc || "";
+  grabPanel(s);
   $("#lbtags").innerHTML = (s.tags || []).map(t => `<span>${esc(t.includes(":") ? lookLabel(t) + LOOK_WORDS[t.split(":")[0]] : t)}</span>`).join("");
   $("#lbpath").textContent = s.path;
   const tone = TONES.find(([, , f]) => f(s)), col = COLORS.find(([, , f]) => f(s));
