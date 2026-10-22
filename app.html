@@ -290,7 +290,7 @@ body.m #lb .btns { order: 10; } body.m #lbpath { order: 11; } body.m #lbstat { o
 .under-ring { opacity: .1 !important; pointer-events: none !important; transition: opacity .12s; }
 /* scopes: no text selection (a firm press on iOS selected the waveform and showed its own magnifier) */
 .scopes, .scopes * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-#wfLoupe { position: fixed; z-index: 30; width: 104px; height: 66px; border-radius: 33px; border: 2px solid rgba(255,255,255,.85);
+#wfLoupe { position: fixed; z-index: 30; width: 84px; height: 54px; border-radius: 27px; border: 2px solid rgba(255,255,255,.85);
   box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.55); pointer-events: none; display: none; }
 #wfLoupe.on { display: block; }
 /* iOS: a long press on an image opens its own Copy/Share menu and cancels our touch; the full-res viewer keeps it for saving */
@@ -727,7 +727,7 @@ function fileUrl(p) { return "file://" + p.split("/").map(encodeURIComponent).jo
 // Served from the Mac (phone / Tailscale): originals come from /orig/<id>; opened as a file on the Mac: file:// paths.
 const SERVED = location.protocol.startsWith("http");
 function fullSrc(s) { return SERVED ? "orig/" + s.id + (s.bx ? "?t" : "") : (/\.(jpe?g|png)$/i.test(s.path) ? fileUrl(s.path) : null); }
-const PAGE_VERSION = "2026-10-22 · loupe small";   // shown in Details, to check which copy a device has
+const PAGE_VERSION = "2026-10-22 · loupe smaller";   // shown in Details, to check which copy a device has
 const PHONE = matchMedia("(max-width: 760px), (hover: none) and (pointer: coarse) and (max-height: 520px)");   // phones, upright or turned sideways
 const LAND = matchMedia("(orientation: landscape)");
 // Phone layout: tab bar, even grid, full-bleed large view. Desktop never gets body.m.
@@ -1061,7 +1061,7 @@ const Scope = (() => {
   const loupe = document.createElement("canvas"); loupe.id = "wfLoupe"; document.body.appendChild(loupe);
   function showLoupe(e) {
     if (!S) return;
-    const r = wfc.getBoundingClientRect(), W = 104, H = 66, Z = 2.5, dpr = S.dpr;
+    const r = wfc.getBoundingClientRect(), W = 84, H = 54, Z = 2.5, dpr = S.dpr;
     if (loupe.width !== W * dpr) { loupe.width = W * dpr; loupe.height = H * dpr; }
     const kx = wfc.width / r.width, ky = wfc.height / r.height;
     const cx = Math.min(r.right, Math.max(r.left, e.clientX)), cy = Math.min(r.bottom, Math.max(r.top, e.clientY));
